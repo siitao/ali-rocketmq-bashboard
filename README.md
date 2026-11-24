@@ -158,6 +158,26 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 \
 
 只信任本机 Nginx：Nginx 必须**覆盖** `X-Forwarded-For`（示例配置已改为 `$remote_addr`），否则客户端可伪造来源 IP，绕过登录限流并污染审计日志。
 
+### 反向代理后静态资源变成 http://
+
+如果浏览器控制台出现类似：
+
+```
+Connecting to 'http://your-domain/static/app.css' violates ... connect-src 'self'
+```
+
+说明应用没有识别到 Nginx 已经终止 HTTPS，生成了 `http://` 的静态资源地址，被 HTTPS 页面的 CSP/混合内容策略拦截。
+
+处理方式：
+
+1. Nginx 确认有 `proxy_set_header X-Forwarded-Proto $scheme;`；
+2. Uvicorn 启动时带 `--proxy-headers --forwarded-allow-ips=127.0.0.1`（Dockerfile 已带）；
+3. 模板中的静态资源已改为 `/static/...` 根相对路径，会跟随页面协议；
+4. 重启应用并强制刷新浏览器（Ctrl+F5）；
+5. 不要通过放宽 CSP 允许 `http://` 来绕过，根因是协议识别和静态资源地址。
+
+HTTPS 部署还应设置 `COOKIE_SECURE=true`，并确保上面的代理头配置生效。
+
 **必须单 worker**：登录限流和 OpenAPI 缓存都是进程内状态。
 
 ## 安全模型与上线迁移

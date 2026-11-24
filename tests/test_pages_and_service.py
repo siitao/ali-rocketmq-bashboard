@@ -41,6 +41,15 @@ def test_all_pages_render(client):
         assert response.status_code == 200, f"{path} -> {response.status_code}: {response.text[:500]}"
 
 
+def test_static_assets_use_root_relative_urls(client):
+    login(client, "viewer", "viewer1234")
+    page = client.get("/")
+    assert 'href="/static/app.css"' in page.text
+    assert 'src="/static/app.js"' in page.text
+    assert 'href="/static/favicon.svg"' in page.text
+    assert "http://testserver/static" not in page.text
+
+
 def test_message_query_and_detail_are_audited(client, db):
     login(client, "viewer", "viewer1234")
     window = _message_window()
