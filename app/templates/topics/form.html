@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set is_create = mode == 'create' %}
+{% block title %}{{ '新建 Topic' if is_create else '编辑 Topic' }} · {{ app_name }}{% endblock %}
+{% block content %}
+{% set action_url = '/topics/new' if is_create else '/topics/' ~ (topic.name|urlencode) ~ '/edit' %}
+{% set cancel_url = '/topics' ~ instance_qs if is_create else '/topics/' ~ (topic.name|urlencode) ~ instance_qs %}
+<div class="breadcrumb">
+  <a href="/topics{{ instance_qs }}">Topics</a>
+  <span class="sep">/</span>
+  <span>{{ '新建' if is_create else topic.name }}</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>{{ '新建 Topic' if is_create else '编辑 Topic' }}</h1>
+    <p class="page-subtitle">{{ instance_id }}</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>Topic 配置</h2>
+    <span class="card-sub">消息类型创建后不可修改</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ action_url }}{{ instance_qs }}" data-once>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Topic 名称 <span class="required">*</span></span>
+          <input class="input" type="text" name="name" value="{{ form.name }}" maxlength="64"
+                 required {% if not is_create %}disabled{% endif %}>
+          {% if is_create %}
+          <span class="field-help">字母、数字、-、_、%，最长 64 个字符。</span>
+          {% else %}
+          <span class="field-help">Topic 创建后名称不可修改。</span>
+          {% endif %}
+        </label>
+
+        <label class="field">
+          <span class="field-label">消息类型 <span class="required">*</span></span>
+          <select class="select" name="message_type" {% if not is_create %}disabled{% endif %}>
+            {% for value in message_types %}
+            <option value="{{ value }}" {{ 'selected' if form.message_type == value else '' }}>{{ value|msg_type }}</option>
+            {% endfor %}
+          </select>
+          {% if not is_create %}<span class="field-help">消息类型创建后不可修改。</span>{% endif %}
+        </label>
+
+        <label class="field">
+          <span class="field-label">最大发送 TPS</span>
+          <input class="input" type="number" name="max_send_tps" min="1"
+                 value="{{ form.max_send_tps }}" placeholder="留空表示不单独设置">
+          <span class="field-help">可选。仅限制发送侧 TPS，不影响消费。</span>
+        </label>
+
+        <label class="field span-2">
+          <span class="field-label">备注</span>
+          <textarea class="textarea" name="remark" maxlength="500"
+                    placeholder="用途、负责人、上下游信息">{{ form.remark }}</textarea>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit" data-busy-text="保存中…">
+          {{ '创建 Topic' if is_create else '保存修改' }}
+        </button>
+        <a class="btn btn-ghost" href="{{ cancel_url }}">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

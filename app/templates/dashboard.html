@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}概览 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>实例概览</h1>
+    <p class="page-subtitle">RocketMQ 5.0 · {{ instance_id }}</p>
+  </div>
+  <div class="page-actions">
+    {% if can(user.role, 'topic:create') %}
+    <a class="btn btn-primary" href="/topics/new{{ instance_qs }}">新建 Topic</a>
+    {% endif %}
+    {% if can(user.role, 'group:create') %}
+    <a class="btn" href="/groups/new{{ instance_qs }}">新建 Group</a>
+    {% endif %}
+    <a class="btn" href="/messages{{ instance_qs }}">消息查询</a>
+  </div>
+</div>
+
+{% if mock %}
+<div class="notice">
+  <strong>Mock 模式：</strong>当前展示内存数据，不会访问阿里云。设置 <code>MOCK_ALIYUN=0</code> 后接入真实实例。
+</div>
+{% endif %}
+
+{% if missing %}
+<div class="flash flash-warning">
+  以下白名单实例在当前地域未找到，请检查实例 ID、地域和 RAM 权限：{{ missing|join('、') }}
+</div>
+{% endif %}
+
+{% if info %}
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">实例状态</div>
+    <div class="stat-value small"><span class="badge {{ info.status|status_class }}">{{ info.status or '未知' }}</span></div>
+    <div class="stat-meta">{{ info.name }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Topics</div>
+    <div class="stat-value">{{ topics_total if topics_total is not none else '-' }}</div>
+    <div class="stat-meta">当前实例 Topic 总数</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Consumer Groups</div>
+    <div class="stat-value">{{ groups_total if groups_total is not none else '-' }}</div>
+    <div class="stat-meta">当前实例消费组总数</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">地域</div>
+    <div class="stat-value small mono">{{ info.region_id or '-' }}</div>
+    <div class="stat-meta">{{ info.instance_type or '实例类型未返回' }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>实例信息</h2>
+    <span class="card-sub mono">{{ info.instance_id }}</span>
+  </div>
+  <div class="card-body">
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-label">实例名称</div>
+        <div class="detail-value">{{ info.name or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">实例 ID</div>
+        <div class="detail-value mono">{{ info.instance_id }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">状态</div>
+        <div class="detail-value"><span class="badge {{ info.status|status_class }}">{{ info.status or '未知' }}</span></div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">地域</div>
+        <div class="detail-value mono">{{ info.region_id or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">创建时间</div>
+        <div class="detail-value">{{ info.create_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">接入点</div>
+        <div class="detail-value mono">{{ info.endpoints or '打开实例详情页时由阿里云返回' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">备注</div>
+        <div class="detail-value">{{ info.description or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>常用入口</h2>
+    <span class="card-sub">管理操作全部按人记录审计日志</span>
+  </div>
+  <div class="card-body">
+    <div class="page-actions">
+      <a class="btn" href="/topics{{ instance_qs }}">Topic 列表</a>
+      <a class="btn" href="/groups{{ instance_qs }}">Group 列表</a>
+      <a class="btn" href="/messages{{ instance_qs }}">消息查询</a>
+      {% if can(user.role, 'audit:view') %}<a class="btn" href="/admin/audit">审计日志</a>{% endif %}
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty">
+    <strong>实例不可用</strong>
+    请检查 <code>ALLOWED_INSTANCE_IDS</code>、<code>ALIYUN_REGION</code> 以及 ECS RAM 角色权限。
+  </div>
+</div>
+{% endif %}
+{% endblock %}

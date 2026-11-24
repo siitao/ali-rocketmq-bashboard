@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}删除 {{ group.group_id }} · {{ app_name }}{% endblock %}
+{% block content %}
+{% set action_url = '/groups/' ~ (group.group_id|urlencode) ~ '/delete' %}
+<div class="breadcrumb">
+  <a href="/groups{{ instance_qs }}">Consumer Groups</a>
+  <span class="sep">/</span>
+  <a class="mono" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">{{ group.group_id }}</a>
+  <span class="sep">/</span>
+  <span>删除</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>删除 Consumer Group</h1>
+    <p class="page-subtitle">此操作不可恢复，请确认没有在线消费者</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>危险操作</h2>
+    <span class="badge badge-danger">不可恢复</span>
+  </div>
+  <div class="card-body">
+    <div class="flash flash-warning">
+      即将删除 Consumer Group <code>{{ group.group_id }}</code>。
+      删除后该 Group 的消费位点和订阅关系将失效，在线消费者会断开连接。
+    </div>
+    <form method="post" action="{{ action_url }}{{ instance_qs }}" data-once>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <label class="field">
+        <span class="field-label">请输入完整 Group ID 以确认 <span class="required">*</span></span>
+        <input class="input" type="text" name="confirm_name" required autocomplete="off"
+               placeholder="{{ group.group_id }}">
+        <span class="field-help">名称：<code>{{ group.group_id }}</code></span>
+      </label>
+      <div class="form-actions">
+        <button class="btn btn-danger" type="submit" data-busy-text="删除中…">确认删除 Group</button>
+        <a class="btn btn-ghost" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

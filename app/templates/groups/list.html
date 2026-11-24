@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Consumer Groups · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Consumer Groups</h1>
+    <p class="page-subtitle">实例 {{ instance_id }} · 共 {{ page_obj.total|number }} 个</p>
+  </div>
+  <div class="page-actions">
+    <form class="inline-fields" method="get" action="/groups">
+      {% if instance_id %}<input type="hidden" name="instance" value="{{ instance_id }}">{% endif %}
+      <label class="field">
+        <span class="field-label">搜索</span>
+        <input class="input" type="text" name="q" value="{{ q }}" placeholder="Group ID 或备注">
+      </label>
+      <button class="btn" type="submit">搜索</button>
+      {% if q %}<a class="btn btn-ghost" href="/groups{{ instance_qs }}">清除</a>{% endif %}
+    </form>
+    {% if can(user.role, 'group:create') %}
+    <a class="btn btn-primary" href="/groups/new{{ instance_qs }}">新建 Group</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Group ID</th>
+          <th>状态</th>
+          <th>消费模式</th>
+          <th class="num">最大接收 TPS</th>
+          <th>备注</th>
+          <th>更新时间</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for group in groups %}
+        <tr>
+          <td><a class="mono" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">{{ group.group_id }}</a></td>
+          <td><span class="badge {{ group.status|status_class }}">{{ group.status or '未知' }}</span></td>
+          <td><span class="badge badge-neutral">{{ group.message_model|message_model }}</span></td>
+          <td class="num">{{ group.max_receive_tps|number }}</td>
+          <td class="cell-muted cell-truncate" title="{{ group.remark }}">{{ group.remark or '-' }}</td>
+          <td class="cell-muted nowrap">{{ group.update_time or group.create_time or '-' }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn btn-ghost btn-sm" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">详情</a>
+              {% if can(user.role, 'group:update') %}
+              <a class="btn btn-ghost btn-sm" href="/groups/{{ group.group_id|urlencode }}/edit{{ instance_qs }}">编辑</a>
+              {% endif %}
+              {% if can(user.role, 'group:delete') %}
+              <a class="btn btn-ghost-danger btn-sm" href="/groups/{{ group.group_id|urlencode }}/delete{{ instance_qs }}">删除</a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7">
+            <div class="empty">
+              <strong>还没有 Consumer Group</strong>
+              {% if q %}没有匹配 “{{ q }}” 的 Group。{% else %}创建第一个消费组开始使用。{% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set base_path = "/groups" %}
+  {% set extra_query = ("&q=" ~ (q|urlencode)) if q else "" %}
+  {% include "_pagination.html" %}
+</div>
+{% endblock %}

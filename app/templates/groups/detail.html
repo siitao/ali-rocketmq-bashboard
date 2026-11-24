@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}{{ group.group_id }} · Group · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="/groups{{ instance_qs }}">Consumer Groups</a>
+  <span class="sep">/</span>
+  <span class="mono">{{ group.group_id }}</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1 class="mono">{{ group.group_id }}</h1>
+    <p class="page-subtitle">Consumer Group 详情 · {{ instance_id }}</p>
+  </div>
+  <div class="page-actions">
+    {% if can(user.role, 'group:update') %}
+    <a class="btn" href="/groups/{{ group.group_id|urlencode }}/edit{{ instance_qs }}">编辑</a>
+    {% endif %}
+    {% if can(user.role, 'group:delete') %}
+    <a class="btn btn-ghost-danger" href="/groups/{{ group.group_id|urlencode }}/delete{{ instance_qs }}">删除</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if lag %}
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">待消费消息</div>
+    <div class="stat-value">{{ lag.total_ready|number }}</div>
+    <div class="stat-meta">ready messages</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">处理中</div>
+    <div class="stat-value">{{ lag.total_inflight|number }}</div>
+    <div class="stat-meta">inflight messages</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">投递延迟</div>
+    <div class="stat-value">{{ lag.delivery_duration|duration }}</div>
+    <div class="stat-meta">最早未消费消息的等待时长</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">最后消费时间</div>
+    <div class="stat-value small">{{ lag.last_consume_timestamp|epoch_ms }}</div>
+    <div class="stat-meta">最近一次消费位点更新时间</div>
+  </div>
+</div>
+{% elif lag_error %}
+<div class="flash flash-warning">消费堆积读取失败：{{ lag_error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>基础信息</h2>
+    <span class="badge {{ group.status|status_class }}">{{ group.status or '未知' }}</span>
+  </div>
+  <div class="card-body">
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-label">Group ID</div>
+        <div class="detail-value mono">{{ group.group_id }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">消费模式</div>
+        <div class="detail-value">{{ group.message_model|message_model }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">投递顺序</div>
+        <div class="detail-value">{{ group.delivery_order_type|order_type }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">重试策略</div>
+        <div class="detail-value">{{ group.retry_policy or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">最大接收 TPS</div>
+        <div class="detail-value">{{ group.max_receive_tps|number }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">独占订阅</div>
+        <div class="detail-value">{{ '是' if group.exclusive else '否' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">创建时间</div>
+        <div class="detail-value">{{ group.create_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">更新时间</div>
+        <div class="detail-value">{{ group.update_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">备注</div>
+        <div class="detail-value">{{ group.remark or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>订阅关系</h2>
+    <span class="card-sub">{{ subscriptions|length }} 个 Topic</span>
+  </div>
+  {% if subs_error %}
+  <div class="card-body"><div class="flash flash-warning">订阅关系读取失败：{{ subs_error }}</div></div>
+  {% elif subscriptions %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Topic</th><th>过滤类型</th><th>过滤表达式</th><th>订阅状态</th><th>消费模式</th></tr>
+      </thead>
+      <tbody>
+      {% for sub in subscriptions %}
+        <tr>
+          <td><a class="mono" href="/topics/{{ sub.topic_name|urlencode }}{{ instance_qs }}">{{ sub.topic_name }}</a></td>
+          <td>{{ sub.filter_type or '-' }}</td>
+          <td class="mono">{{ sub.filter_expression or '*' }}</td>
+          <td><span class="badge {{ sub.status|status_class }}">{{ sub.status or '未知' }}</span></td>
+          <td>{{ sub.message_model|message_model }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <strong>暂无订阅关系</strong>
+    该 Group 还没有在线消费者创建订阅，或订阅尚未同步。
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>消费堆积</h2>
+    <span class="card-sub">按 Topic 统计</span>
+  </div>
+  {% if lag and lag.topics %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Topic</th><th class="num">待消费</th><th class="num">处理中</th><th class="num">合计</th><th class="num">投递延迟</th></tr>
+      </thead>
+      <tbody>
+      {% for item in lag.topics %}
+        <tr>
+          <td class="mono">{{ item.topic_name }}</td>
+          <td class="num">{{ item.ready_count|number }}</td>
+          <td class="num">{{ item.inflight_count|number }}</td>
+          <td class="num">{{ item.total|number }}</td>
+          <td class="num">{{ item.delivery_duration|duration }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif lag %}
+  <div class="empty"><strong>暂无堆积数据</strong>该 Group 当前没有可统计的订阅 Topic。</div>
+  {% else %}
+  <div class="empty"><strong>堆积数据不可用</strong>{{ lag_error or '请稍后重试。' }}</div>
+  {% endif %}
+</div>
+{% endblock %}

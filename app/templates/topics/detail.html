@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ topic.name }} · Topic · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="/topics{{ instance_qs }}">Topics</a>
+  <span class="sep">/</span>
+  <span class="mono">{{ topic.name }}</span>
+</div>
+
+{% set msg_link = "/messages?topic=" ~ (topic.name|urlencode) ~ ("&instance=" ~ (instance_id|urlencode) if instance_id else "") %}
+<div class="page-head">
+  <div>
+    <h1 class="mono">{{ topic.name }}</h1>
+    <p class="page-subtitle">Topic 详情 · {{ instance_id }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="{{ msg_link }}">查询消息</a>
+    {% if can(user.role, 'topic:update') %}
+    <a class="btn" href="/topics/{{ topic.name|urlencode }}/edit{{ instance_qs }}">编辑</a>
+    {% endif %}
+    {% if can(user.role, 'topic:delete') %}
+    <a class="btn btn-ghost-danger" href="/topics/{{ topic.name|urlencode }}/delete{{ instance_qs }}">删除</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>基础信息</h2>
+    <span class="badge {{ topic.status|status_class }}">{{ topic.status or '未知' }}</span>
+  </div>
+  <div class="card-body">
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-label">Topic 名称</div>
+        <div class="detail-value mono">{{ topic.name }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">消息类型</div>
+        <div class="detail-value">{{ topic.message_type|msg_type }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">状态</div>
+        <div class="detail-value">{{ topic.status or '未知' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">最大发送 TPS</div>
+        <div class="detail-value">{{ topic.max_send_tps|number }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">创建时间</div>
+        <div class="detail-value">{{ topic.create_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">更新时间</div>
+        <div class="detail-value">{{ topic.update_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">备注</div>
+        <div class="detail-value">{{ topic.remark or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>排障入口</h2>
+    <span class="card-sub">按 msgId、Key 或时间范围查询消息</span>
+  </div>
+  <div class="card-body">
+    <a class="btn btn-primary" href="{{ msg_link }}">查询该 Topic 的消息</a>
+  </div>
+</div>
+{% endblock %}

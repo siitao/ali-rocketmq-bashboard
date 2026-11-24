@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}消息查询 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>消息查询</h1>
+    <p class="page-subtitle">实例 {{ instance_id }} · 按 Topic、msgId、Key 或时间范围检索</p>
+  </div>
+</div>
+
+<div data-max-query-hours="{{ max_hours }}" hidden></div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card card-overflow">
+  <div class="card-head">
+    <h2>查询条件</h2>
+    <span class="card-sub">单次查询时间跨度最多 {{ max_hours }} 小时</span>
+  </div>
+  <div class="card-body">
+    <form method="get" action="/messages" data-once data-range-form>
+      <input type="hidden" name="search" value="1">
+      {% if instance_id %}<input type="hidden" name="instance" value="{{ instance_id }}">{% endif %}
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="topic-input">Topic <span class="required">*</span></label>
+          <div class="combobox" data-combobox>
+            <input class="input" type="text" id="topic-input" name="topic" value="{{ topic }}"
+                   placeholder="输入或选择 Topic" required autocomplete="off"
+                   role="combobox" aria-autocomplete="list" aria-expanded="false"
+                   aria-controls="topic-menu" data-combobox-input>
+            <button class="combobox-toggle" type="button" aria-label="展开 Topic 列表"
+                    data-combobox-toggle tabindex="-1">
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor"
+                      stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="combobox-menu" id="topic-menu" role="listbox" data-combobox-menu hidden>
+              {% for item in topics %}
+              <button class="combobox-option" type="button" role="option"
+                      data-value="{{ item.name }}" data-combobox-option aria-selected="false">
+                <span class="combobox-option-name">{{ item.name }}</span>
+                <span class="combobox-option-meta">{{ item.message_type|msg_type }}</span>
+              </button>
+              {% endfor %}
+              <div class="combobox-empty" data-combobox-empty hidden>没有匹配的 Topic，可直接输入。</div>
+            </div>
+          </div>
+          <span class="field-help">可从已有 Topic 中选择，也可以直接输入。</span>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Message ID</span>
+          <input class="input mono" type="text" name="msg_id" value="{{ msg_id }}" placeholder="可选，精确匹配">
+        </label>
+
+        <div class="field">
+          <span class="field-label" id="start-label">开始时间</span>
+          <div class="datetime" data-datetime-picker>
+            <button class="datetime-trigger" type="button" data-datetime-trigger
+                    aria-haspopup="dialog" aria-expanded="false" aria-labelledby="start-label">
+              <span class="datetime-text" data-datetime-label>{{ start_value|replace('T', ' ') or '请选择时间' }}</span>
+              <svg class="datetime-icon" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="2.5" y="3.5" width="11" height="10" rx="2" fill="none"
+                      stroke="currentColor" stroke-width="1.3"/>
+                <path d="M2.5 6.5h11M5.5 2.5v2M10.5 2.5v2" fill="none"
+                      stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <input type="hidden" name="start" value="{{ start_value }}"
+                   data-range-start data-datetime-value>
+            <div class="datetime-popover" role="dialog" aria-label="选择开始时间"
+                 tabindex="-1" data-datetime-popover hidden></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label" id="end-label">结束时间</span>
+          <div class="datetime" data-datetime-picker>
+            <button class="datetime-trigger" type="button" data-datetime-trigger
+                    aria-haspopup="dialog" aria-expanded="false" aria-labelledby="end-label">
+              <span class="datetime-text" data-datetime-label>{{ end_value|replace('T', ' ') or '请选择时间' }}</span>
+              <svg class="datetime-icon" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="2.5" y="3.5" width="11" height="10" rx="2" fill="none"
+                      stroke="currentColor" stroke-width="1.3"/>
+                <path d="M2.5 6.5h11M5.5 2.5v2M10.5 2.5v2" fill="none"
+                      stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <input type="hidden" name="end" value="{{ end_value }}"
+                   data-range-end data-datetime-value>
+            <div class="datetime-popover" role="dialog" aria-label="选择结束时间"
+                 tabindex="-1" data-datetime-popover hidden></div>
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Message Key</span>
+          <input class="input mono" type="text" name="key" value="{{ key }}" placeholder="可选，包含匹配">
+        </label>
+      </div>
+      <div class="range-error" data-range-error hidden></div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit" data-busy-text="查询中…">查询消息</button>
+        <span class="field-help">查询条件会记录到审计日志，但不会记录消息内容。</span>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if search and page_obj %}
+<div class="card">
+  <div class="card-head">
+    <h2>查询结果</h2>
+    <span class="card-sub">共 {{ page_obj.total|number }} 条 · 按存储时间倒序</span>
+  </div>
+  {% if messages %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>存储时间</th>
+          <th>Message ID</th>
+          <th>Tag</th>
+          <th>Key</th>
+          <th class="num">大小</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for message in messages %}
+        {% set detail_link = "/messages/" ~ (message.msg_id|urlencode) ~ "?topic=" ~ (topic|urlencode) ~ ("&instance=" ~ (instance_id|urlencode) if instance_id else "") %}
+        <tr>
+          <td class="nowrap">{{ message.store_time or '-' }}</td>
+          <td class="mono cell-truncate" title="{{ message.msg_id }}"><a href="{{ detail_link }}">{{ message.msg_id }}</a></td>
+          <td>{{ message.tag or '-' }}</td>
+          <td class="mono cell-truncate" title="{{ message.keys }}">{{ message.keys or '-' }}</td>
+          <td class="num">{{ message.body_size|number }}</td>
+          <td><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{{ detail_link }}">详情</a></div></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set base_path = "/messages" %}
+  {% set extra_query = "&search=1&topic=" ~ (topic|urlencode) ~ "&start=" ~ (start_value|urlencode) ~ "&end=" ~ (end_value|urlencode) ~ "&msg_id=" ~ (msg_id|urlencode) ~ "&key=" ~ (key|urlencode) %}
+  {% include "_pagination.html" %}
+  {% else %}
+  <div class="empty">
+    <strong>没有匹配的消息</strong>
+    尝试扩大时间范围、检查 Topic 名称，或改用 Key / msgId 查询。
+  </div>
+  {% endif %}
+</div>
+{% elif search and not error %}
+<div class="card">
+  <div class="empty"><strong>没有查询结果</strong>请调整查询条件后重试。</div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% set is_create = mode == 'create' %}
+{% block title %}{{ '新建 Group' if is_create else '编辑 Group' }} · {{ app_name }}{% endblock %}
+{% block content %}
+{% set action_url = '/groups/new' if is_create else '/groups/' ~ (group.group_id|urlencode) ~ '/edit' %}
+{% set cancel_url = '/groups' ~ instance_qs if is_create else '/groups/' ~ (group.group_id|urlencode) ~ instance_qs %}
+<div class="breadcrumb">
+  <a href="/groups{{ instance_qs }}">Consumer Groups</a>
+  <span class="sep">/</span>
+  <span>{{ '新建' if is_create else group.group_id }}</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>{{ '新建 Consumer Group' if is_create else '编辑 Consumer Group' }}</h1>
+    <p class="page-subtitle">{{ instance_id }}</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>Group 配置</h2>
+    <span class="card-sub">重试策略由投递顺序自动匹配</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ action_url }}{{ instance_qs }}" data-once>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Group ID <span class="required">*</span></span>
+          <input class="input" type="text" name="group_id" value="{{ form.group_id }}" maxlength="64"
+                 required {% if not is_create %}disabled{% endif %}>
+          {% if is_create %}
+          <span class="field-help">字母、数字、-、_、%，最长 64 个字符。</span>
+          {% else %}
+          <span class="field-help">Group ID 创建后不可修改。</span>
+          {% endif %}
+        </label>
+
+        <label class="field">
+          <span class="field-label">投递顺序 <span class="required">*</span></span>
+          <select class="select" name="delivery_order_type">
+            {% for value in order_types %}
+            <option value="{{ value }}" {{ 'selected' if form.delivery_order_type == value else '' }}>{{ value|order_type }}</option>
+            {% endfor %}
+          </select>
+          <span class="field-help">顺序投递（Orderly）会使用固定间隔重试；并发投递（Concurrently）使用退避重试。</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">最大重试次数</span>
+          <input class="input" type="number" name="max_retry_times" min="0" max="100" value="{{ form.max_retry_times }}">
+          <span class="field-help">消费失败后的最大重试次数，默认 16。</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">固定重试间隔（秒）</span>
+          <input class="input" type="number" name="fixed_interval_retry_time" min="1" max="600"
+                 value="{{ form.fixed_interval_retry_time }}">
+          <span class="field-help">仅顺序投递生效，范围 1–600 秒。</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">最大接收 TPS</span>
+          <input class="input" type="number" name="max_receive_tps" min="1" value="{{ form.max_receive_tps }}"
+                 placeholder="留空表示不单独设置">
+        </label>
+
+        <label class="field span-2">
+          <span class="field-label">备注</span>
+          <textarea class="textarea" name="remark" maxlength="500"
+                    placeholder="业务用途、负责人等">{{ form.remark }}</textarea>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit" data-busy-text="保存中…">
+          {{ '创建 Group' if is_create else '保存修改' }}
+        </button>
+        <a class="btn btn-ghost" href="{{ cancel_url }}">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

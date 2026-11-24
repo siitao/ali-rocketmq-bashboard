@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}用户管理 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>用户管理</h1>
+    <p class="page-subtitle">面板账号与角色 · 当前启用管理员 {{ active_admins }} 人</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>创建用户</h2>
+    <span class="card-sub">密码至少 8 位，账号不开放自助注册</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/admin/users" class="inline-fields" data-once>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <label class="field">
+        <span class="field-label">用户名</span>
+        <input class="input" type="text" name="username" value="{{ form.username }}" maxlength="64" required>
+      </label>
+      <label class="field">
+        <span class="field-label">初始密码</span>
+        <input class="input" type="password" name="password" minlength="8" required autocomplete="new-password">
+      </label>
+      <label class="field">
+        <span class="field-label">角色</span>
+        <select class="select" name="role">
+          {% for role in roles %}
+          <option value="{{ role }}" {{ 'selected' if form.role == role else '' }}>{{ role_labels[role] }}（{{ role }}）</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary" type="submit" data-busy-text="创建中…">创建用户</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>账号列表</h2>
+    <span class="card-sub">共 {{ users|length }} 个账号</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>用户名</th>
+          <th>角色</th>
+          <th>状态</th>
+          <th>创建时间</th>
+          <th>最后登录</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for item in users %}
+        <tr>
+          <td>
+            <span class="mono">{{ item.username }}</span>
+            {% if item.id == user.id %}<span class="badge badge-info">当前账号</span>{% endif %}
+          </td>
+          <td>
+            <form method="post" action="/admin/users/{{ item.id }}/role" class="role-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+              <select class="select" name="role">
+                {% for role in roles %}
+                <option value="{{ role }}" {{ 'selected' if item.role == role else '' }}>{{ role_labels[role] }}</option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-sm" type="submit">保存</button>
+            </form>
+          </td>
+          <td>
+            {% if item.is_active %}
+            <span class="badge badge-success">启用</span>
+            {% else %}
+            <span class="badge badge-neutral">停用</span>
+            {% endif %}
+          </td>
+          <td class="cell-muted nowrap">{{ item.created_at|dt('%Y-%m-%d %H:%M') }}</td>
+          <td class="cell-muted nowrap">{{ item.last_login_at|dt('%Y-%m-%d %H:%M') if item.last_login_at else '-' }}</td>
+          <td>
+            <div class="row-actions">
+              <form method="post" action="/admin/users/{{ item.id }}/active">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <input type="hidden" name="action" value="{{ 'disable' if item.is_active else 'enable' }}">
+                <button class="btn btn-ghost btn-sm" type="submit">{{ '停用' if item.is_active else '启用' }}</button>
+              </form>
+              <details class="inline-details">
+                <summary class="btn btn-ghost btn-sm">重置密码</summary>
+                <form method="post" action="/admin/users/{{ item.id }}/password">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                  <input class="input input-sm" type="password" name="password" minlength="8"
+                         required autocomplete="new-password" placeholder="新密码（至少 8 位）">
+                  <button class="btn btn-sm" type="submit">确定</button>
+                </form>
+              </details>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6"><div class="empty"><strong>还没有账号</strong>使用上方表单创建第一个用户。</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

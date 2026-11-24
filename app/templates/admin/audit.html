@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}审计日志 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>审计日志</h1>
+    <p class="page-subtitle">谁在什么时间、对哪个实例和对象做了什么操作</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>筛选</h2>
+    <span class="card-sub">共 {{ page_obj.total|number }} 条记录</span>
+  </div>
+  <div class="card-body">
+    <form method="get" action="/admin/audit" class="inline-fields">
+      <label class="field">
+        <span class="field-label">用户</span>
+        <input class="input" type="text" name="username" value="{{ username }}" placeholder="用户名包含">
+      </label>
+      <label class="field">
+        <span class="field-label">动作</span>
+        <select class="select" name="action">
+          <option value="">全部动作</option>
+          {% for item in actions %}
+          <option value="{{ item }}" {{ 'selected' if action == item else '' }}>{{ item|action_label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">结果</span>
+        <select class="select" name="result">
+          <option value="">全部</option>
+          <option value="success" {{ 'selected' if result == 'success' else '' }}>成功</option>
+          <option value="failure" {{ 'selected' if result == 'failure' else '' }}>失败</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" type="submit">筛选</button>
+      <a class="btn btn-ghost" href="/admin/audit">重置</a>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>用户</th>
+          <th>动作</th>
+          <th>实例</th>
+          <th>对象</th>
+          <th>结果</th>
+          <th>IP</th>
+          <th>参数</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for entry in entries %}
+        <tr>
+          <td class="nowrap">{{ entry.created_at|dt }}</td>
+          <td class="mono">{{ entry.username }}</td>
+          <td class="mono" title="{{ entry.action }}">{{ entry.action|action_label }}</td>
+          <td class="mono cell-truncate" title="{{ entry.instance_id }}">{{ entry.instance_id or '-' }}</td>
+          <td class="mono cell-truncate" title="{{ entry.target }}">{{ entry.target or '-' }}</td>
+          <td>
+            {% if entry.result == 'success' %}
+            <span class="badge badge-success">成功</span>
+            {% else %}
+            <span class="badge badge-danger">失败</span>
+            {% endif %}
+            {% if entry.error_code %}<div class="cell-muted mono">{{ entry.error_code }}</div>{% endif %}
+          </td>
+          <td class="mono cell-muted">{{ entry.ip or '-' }}</td>
+          <td>
+            {% if entry.params_json %}
+            <details class="inline-details">
+              <summary class="btn btn-ghost btn-sm">查看</summary>
+              <pre class="params">{{ entry.params_json }}</pre>
+            </details>
+            {% else %}
+            <span class="cell-muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8"><div class="empty"><strong>没有匹配的审计记录</strong>调整筛选条件后重试。</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set base_path = "/admin/audit" %}
+  {% set extra_query = ("&username=" ~ (username|urlencode) if username else "") ~ ("&action=" ~ (action|urlencode) if action else "") ~ ("&result=" ~ (result|urlencode) if result else "") %}
+  {% include "_pagination.html" %}
+</div>
+{% endblock %}

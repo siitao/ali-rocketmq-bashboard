@@ -1,0 +1,28 @@
+{% if page_obj and page_obj.pages > 1 %}
+<div class="pagination">
+  <span>共 {{ page_obj.total|number }} 条 · 第 {{ page_obj.page }} / {{ page_obj.pages }} 页</span>
+  <div class="pages">
+    {% set inst = ('&instance=' ~ (instance_id|urlencode)) if instance_id is defined and instance_id else '' %}
+    {% set extra = extra_query or '' %}
+    {% set current = page_obj.page %}
+    {% set start = [1, current - 2]|max %}
+    {% set finish = [page_obj.pages, current + 2]|min %}
+    <a class="page-link{{ ' disabled' if current <= 1 else '' }}"
+       href="{{ base_path }}?page={{ current - 1 }}{{ inst }}{{ extra }}">上一页</a>
+    {% if start > 1 %}
+      <a class="page-link" href="{{ base_path }}?page=1{{ inst }}{{ extra }}">1</a>
+      {% if start > 2 %}<span class="muted">…</span>{% endif %}
+    {% endif %}
+    {% for p in range(start, finish + 1) %}
+      <a class="page-link{{ ' current' if p == current else '' }}"
+         href="{{ base_path }}?page={{ p }}{{ inst }}{{ extra }}">{{ p }}</a>
+    {% endfor %}
+    {% if finish < page_obj.pages %}
+      {% if finish < page_obj.pages - 1 %}<span class="muted">…</span>{% endif %}
+      <a class="page-link" href="{{ base_path }}?page={{ page_obj.pages }}{{ inst }}{{ extra }}">{{ page_obj.pages }}</a>
+    {% endif %}
+    <a class="page-link{{ ' disabled' if current >= page_obj.pages else '' }}"
+       href="{{ base_path }}?page={{ current + 1 }}{{ inst }}{{ extra }}">下一页</a>
+  </div>
+</div>
+{% endif %}

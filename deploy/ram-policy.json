@@ -1,0 +1,33 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rocketmq:GetInstance",
+        "rocketmq:ListTopics",
+        "rocketmq:GetTopic",
+        "rocketmq:CreateTopic",
+        "rocketmq:UpdateTopic",
+        "rocketmq:DeleteTopic",
+        "rocketmq:ListConsumerGroups",
+        "rocketmq:GetConsumerGroup",
+        "rocketmq:CreateConsumerGroup",
+        "rocketmq:UpdateConsumerGroup",
+        "rocketmq:DeleteConsumerGroup",
+        "rocketmq:ListConsumerGroupSubscriptions",
+        "rocketmq:GetConsumerGroupLag",
+        "rocketmq:ListMessages",
+        "rocketmq:GetMessageDetail"
+      ],
+      "Resource": [
+        "acs:rocketmq:cn-hangzhou:1234567890123456:instance/rmq-cn-xxxxxxxx"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "rocketmq:ListInstances",
+      "Resource": "*"
+    }
+  ]
+}

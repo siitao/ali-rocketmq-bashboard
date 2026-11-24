@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}消息详情 · {{ app_name }}{% endblock %}
+{% block content %}
+{% set back_link = "/messages?topic=" ~ (topic|urlencode) ~ ("&instance=" ~ (instance_id|urlencode) if instance_id else "") %}
+<div class="breadcrumb">
+  <a href="{{ back_link }}">消息查询</a>
+  <span class="sep">/</span>
+  <span class="mono">{{ message.msg_id }}</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>消息详情</h1>
+    <p class="page-subtitle mono">{{ message.msg_id }}</p>
+  </div>
+  <div class="page-actions">
+    <button class="btn" type="button" data-copy="#msg-id-value">复制 Message ID</button>
+    <a class="btn btn-ghost" href="{{ back_link }}">返回查询</a>
+  </div>
+</div>
+<span id="msg-id-value" class="hidden">{{ message.msg_id }}</span>
+
+<div class="card">
+  <div class="card-head">
+    <h2>基础信息</h2>
+    {% if message.message_type %}<span class="badge badge-neutral">{{ message.message_type|msg_type }}</span>{% endif %}
+  </div>
+  <div class="card-body">
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-label">Message ID</div>
+        <div class="detail-value mono">{{ message.msg_id }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Topic</div>
+        <div class="detail-value mono">{{ message.topic_name or topic }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Tag</div>
+        <div class="detail-value">{{ message.tag or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Key</div>
+        <div class="detail-value mono">{{ message.keys or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">消息类型</div>
+        <div class="detail-value">{{ message.message_type|msg_type }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">消息大小</div>
+        <div class="detail-value">{{ message.body_size|number }} 字节</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">生成时间</div>
+        <div class="detail-value">{{ message.born_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">存储时间</div>
+        <div class="detail-value">{{ message.store_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">生成主机</div>
+        <div class="detail-value mono">{{ message.born_host or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">存储主机</div>
+        <div class="detail-value mono">{{ message.store_host or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>消息体</h2>
+    <span class="card-sub">内容可能包含敏感数据</span>
+  </div>
+  <div class="card-body">
+    {% if message.body %}
+    <pre class="code-block">{{ message.body }}</pre>
+    {% else %}
+    <div class="empty"><strong>消息体为空</strong>该消息没有可展示的内容。</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>用户属性</h2>
+    <span class="card-sub">{{ message.user_properties|length }} 项</span>
+  </div>
+  {% if message.user_properties %}
+  <div class="card-body">
+    <table class="kv-table">
+      <tbody>
+      {% for key, value in message.user_properties.items() %}
+        <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>无用户属性</strong></div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>系统属性</h2>
+    <span class="card-sub">{{ message.system_properties|length }} 项</span>
+  </div>
+  {% if message.system_properties %}
+  <div class="card-body">
+    <table class="kv-table">
+      <tbody>
+      {% for key, value in message.system_properties.items() %}
+        <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>无系统属性</strong></div>
+  {% endif %}
+</div>
+{% endblock %}

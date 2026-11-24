@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}删除 {{ topic.name }} · {{ app_name }}{% endblock %}
+{% block content %}
+{% set action_url = '/topics/' ~ (topic.name|urlencode) ~ '/delete' %}
+<div class="breadcrumb">
+  <a href="/topics{{ instance_qs }}">Topics</a>
+  <span class="sep">/</span>
+  <a class="mono" href="/topics/{{ topic.name|urlencode }}{{ instance_qs }}">{{ topic.name }}</a>
+  <span class="sep">/</span>
+  <span>删除</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>删除 Topic</h1>
+    <p class="page-subtitle">此操作不可恢复，请确认影响范围</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>危险操作</h2>
+    <span class="badge badge-danger">不可恢复</span>
+  </div>
+  <div class="card-body">
+    <div class="flash flash-warning">
+      即将删除 Topic <code>{{ topic.name }}</code>（{{ topic.message_type|msg_type }}）。
+      删除后使用该 Topic 的生产者和消费者将无法继续收发消息，已写入的消息也将无法通过该 Topic 查询。
+    </div>
+    <form method="post" action="{{ action_url }}{{ instance_qs }}" data-once>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <label class="field">
+        <span class="field-label">请输入完整 Topic 名称以确认 <span class="required">*</span></span>
+        <input class="input" type="text" name="confirm_name" required autocomplete="off"
+               placeholder="{{ topic.name }}">
+        <span class="field-help">名称：<code>{{ topic.name }}</code></span>
+      </label>
+      <div class="form-actions">
+        <button class="btn btn-danger" type="submit" data-busy-text="删除中…">确认删除 Topic</button>
+        <a class="btn btn-ghost" href="/topics/{{ topic.name|urlencode }}{{ instance_qs }}">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

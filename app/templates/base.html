@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+</head>
+<body>
+{% if user %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/{{ instance_qs }}">
+      <span class="brand-mark">MQ</span>
+      <span class="brand-text">{{ app_name }}</span>
+    </a>
+    <nav class="nav" aria-label="主导航">
+      <a href="/{{ instance_qs }}" class="{{ 'active' if active_nav == 'dashboard' else '' }}">概览</a>
+      <a href="/topics{{ instance_qs }}" class="{{ 'active' if active_nav == 'topics' else '' }}">Topics</a>
+      <a href="/groups{{ instance_qs }}" class="{{ 'active' if active_nav == 'groups' else '' }}">Groups</a>
+      <a href="/messages{{ instance_qs }}" class="{{ 'active' if active_nav == 'messages' else '' }}">消息查询</a>
+      {% if can(user.role, 'user:manage') %}
+      <a href="/admin/users" class="{{ 'active' if active_nav == 'users' else '' }}">用户</a>
+      <a href="/admin/audit" class="{{ 'active' if active_nav == 'audit' else '' }}">审计</a>
+      {% endif %}
+    </nav>
+    <div class="topbar-right">
+      {% if instance_options is defined and instance_options|length > 1 %}
+      <form class="instance-switch" method="get" action="{{ request.url.path }}">
+        <select name="instance" aria-label="切换实例" data-instance-select>
+          {% for item in instance_options %}
+          <option value="{{ item.instance_id }}" {{ 'selected' if item.instance_id == instance_id else '' }}>{{ item.name or item.instance_id }}</option>
+          {% endfor %}
+        </select>
+        <noscript><button class="btn btn-ghost btn-sm" type="submit">切换</button></noscript>
+      </form>
+      {% elif instance_id %}
+      <span class="instance-chip" title="当前实例">{{ instance_id }}</span>
+      {% endif %}
+      <span class="user-chip">
+        <span class="user-name">{{ user.username }}</span>
+        <span class="role-badge role-{{ user.role }}">{{ role_label(user.role) }}</span>
+      </span>
+      <form method="post" action="/logout" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <button class="btn btn-ghost btn-sm" type="submit">退出</button>
+      </form>
+    </div>
+  </div>
+</header>
+{% endif %}
+<main class="page{{ ' page-auth' if not user else '' }}">
+  {% for flash in flashes %}
+  <div class="flash flash-{{ flash.level }}" role="status">
+    <span>{{ flash.message }}</span>
+    <button type="button" class="flash-close" data-dismiss aria-label="关闭">&times;</button>
+  </div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+{% if user %}
+<footer class="footer">内网管理面板 · 所有操作均写入审计日志</footer>
+{% endif %}
+<script src="{{ url_for('static', path='app.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

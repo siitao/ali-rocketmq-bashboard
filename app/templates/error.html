@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ status_code }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="error-shell">
+  <div class="error-card">
+    <div class="error-code">{{ status_code }}</div>
+    <h1>{{ message }}</h1>
+    {% if hint %}<p class="error-hint">{{ hint }}</p>{% endif %}
+    <div class="error-actions">
+      <a class="btn btn-primary" href="/">返回首页</a>
+      <button class="btn btn-ghost" type="button" data-back>返回上一页</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
