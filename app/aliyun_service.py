@@ -238,16 +238,12 @@ class RocketMQService:
         )
 
         acl_info = getattr(item, "acl_info", None)
-        account_info = getattr(item, "account_info", None)
         acl_type = getattr(acl_info, "acl_type", "") if acl_info is not None else ""
         acl_types = (
             list(getattr(acl_info, "acl_types", None) or []) if acl_info is not None else []
         )
         default_vpc_auth_free = (
             getattr(acl_info, "default_vpc_auth_free", None) if acl_info is not None else None
-        )
-        account_username = (
-            getattr(account_info, "username", "") if account_info is not None else ""
         )
         quotas = [
             InstanceQuotaInfo(
@@ -291,7 +287,6 @@ class RocketMQService:
             acl_type=acl_type or "",
             acl_types=acl_types,
             default_vpc_auth_free=default_vpc_auth_free,
-            account_username=account_username or "",
             quotas=quotas,
             retention_hours=retention,
             trace_on=trace_on,

@@ -92,7 +92,6 @@ class MockRocketMQService:
                 acl_type="智能身份识别",
                 acl_types=["INTELLIGENT"],
                 default_vpc_auth_free=True,
-                account_username="mock-user",
                 retention_hours=72,
                 trace_on=True,
                 storage_encryption=False,

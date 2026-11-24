@@ -37,7 +37,6 @@ class InstanceInfo:
     acl_type: str = ""
     acl_types: list[str] = field(default_factory=list)
     default_vpc_auth_free: bool | None = None
-    account_username: str = ""
     quotas: list[InstanceQuotaInfo] = field(default_factory=list)
     retention_hours: int | None = None
     trace_on: bool | None = None

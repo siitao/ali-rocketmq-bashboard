@@ -60,6 +60,10 @@ async def lifespan(_app: FastAPI):
             logger.warning(
                 "COOKIE_SECURE=false：如果面板通过 HTTPS 访问，请务必设为 true"
             )
+        if settings.alibaba_cloud_access_key_id:
+            logger.warning(
+                "检测到静态 AccessKey（.env）：生产环境建议改用 ECS 实例 RAM 角色"
+            )
     if settings.mock_aliyun:
         logger.warning("MOCK_ALIYUN=1：使用内存 Mock 数据，不会访问阿里云")
     yield

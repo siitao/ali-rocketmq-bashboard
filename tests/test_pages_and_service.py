@@ -252,6 +252,25 @@ def test_topic_subscription_consistency_handles_bool():
     assert status_class(mapped.consistency) == "badge-success"
 
 
+def test_all_referenced_permissions_are_defined():
+    import re
+    from pathlib import Path
+
+    from app.rbac import PERMISSIONS, ROLE_LEVELS
+
+    used = set()
+    for path in Path("app").rglob("*"):
+        if path.suffix not in {".py", ".html"}:
+            continue
+        text = path.read_text(encoding="utf-8")
+        used.update(re.findall(r'require_permission\("([^"]+)"\)', text))
+        used.update(re.findall(r"can\(user\.role,\s*['\"]([^'\"]+)['\"]\)", text))
+
+    assert used
+    assert used <= set(PERMISSIONS), sorted(used - set(PERMISSIONS))
+    assert set(PERMISSIONS.values()) <= set(ROLE_LEVELS)
+
+
 def test_mock_new_features():
     from datetime import datetime, timedelta, timezone
 
