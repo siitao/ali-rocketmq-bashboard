@@ -13,6 +13,9 @@
     <p class="page-subtitle">Consumer Group 详情 · {{ instance_id }}</p>
   </div>
   <div class="page-actions">
+    {% if can(user.role, 'group:reset_offset') %}
+    <a class="btn" href="/groups/{{ group.group_id|urlencode }}/reset-offset{{ instance_qs }}">重置位点</a>
+    {% endif %}
     {% if can(user.role, 'group:update') %}
     <a class="btn" href="/groups/{{ group.group_id|urlencode }}/edit{{ instance_qs }}">编辑</a>
     {% endif %}
@@ -127,6 +130,46 @@
     <strong>暂无订阅关系</strong>
     该 Group 还没有在线消费者创建订阅，或订阅尚未同步。
   </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>在线消费者</h2>
+    <span class="card-sub">{{ connections|length }} 个连接</span>
+  </div>
+  {% if connections_error %}
+  <div class="card-body"><div class="flash flash-warning">在线消费者读取失败：{{ connections_error }}</div></div>
+  {% elif connections %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Client ID</th><th>主机名</th><th>出口 IP</th><th>语言</th><th>版本</th><th>消费模式</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for connection in connections %}
+        <tr>
+          <td class="mono cell-truncate" title="{{ connection.client_id }}">{{ connection.client_id }}</td>
+          <td>{{ connection.hostname or '-' }}</td>
+          <td class="mono">{{ connection.egress_ip or '-' }}</td>
+          <td>{{ connection.language or '-' }}</td>
+          <td class="mono">{{ connection.version or '-' }}</td>
+          <td>{{ connection.message_model|message_model }}</td>
+          <td>
+            <div class="row-actions">
+              {% if can(user.role, 'consumer:stack') %}
+              {% set stack_link = "/groups/" ~ (group.group_id|urlencode) ~ "/consumers/" ~ (connection.client_id|urlencode) ~ "/stack" %}
+              <a class="btn btn-ghost btn-sm" href="{{ stack_link }}{{ instance_qs }}">线程栈</a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>暂无在线消费者</strong>消费者上线后，客户端信息会出现在这里。</div>
   {% endif %}
 </div>
 

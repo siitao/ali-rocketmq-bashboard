@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% from "_datetime_field.html" import datetime_field %}
+{% block title %}重置消费位点 · {{ group.group_id }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="/groups{{ instance_qs }}">Consumer Groups</a>
+  <span class="sep">/</span>
+  <a class="mono" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">{{ group.group_id }}</a>
+  <span class="sep">/</span>
+  <span>重置位点</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>重置消费位点</h1>
+    <p class="page-subtitle">Group {{ group.group_id }} · {{ instance_id }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">返回 Group</a>
+  </div>
+</div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+{% if subscriptions_error %}
+<div class="flash flash-warning">订阅关系读取失败：{{ subscriptions_error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>可回放范围</h2>
+    <span class="card-sub">确认时间范围后再重置，避免误回放</span>
+  </div>
+  <div class="card-body">
+    {% if topics %}
+    <form method="get" action="/groups/{{ group.group_id|urlencode }}/reset-offset" class="inline-fields">
+      {% if instance_id %}<input type="hidden" name="instance" value="{{ instance_id }}">{% endif %}
+      <input type="hidden" name="preview" value="1">
+      <label class="field">
+        <span class="field-label">Topic</span>
+        <select class="select" name="topic">
+          {% for item in topics %}
+          <option value="{{ item }}" {{ 'selected' if item == selected_topic else '' }}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn" type="submit">查询可回放范围</button>
+    </form>
+
+    {% if timespan %}
+    <div class="detail-grid mt-16">
+      <div class="detail-item">
+        <div class="detail-label">最早可回放消息</div>
+        <div class="detail-value">{{ timespan.min_timestamp|epoch_ms }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">最新消息时间</div>
+        <div class="detail-value">{{ timespan.max_timestamp|epoch_ms }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">当前消费时间点</div>
+        <div class="detail-value">{{ timespan.consume_timestamp|epoch_ms }}</div>
+      </div>
+    </div>
+    {% elif timespan_error %}
+    <div class="flash flash-warning mt-16">可回放范围读取失败：{{ timespan_error }}</div>
+    {% elif preview %}
+    <div class="empty mt-16"><strong>没有可回放时间数据</strong>检查 Topic 是否仍有消息保留。</div>
+    {% else %}
+    <p class="field-help mt-16">选择 Topic 后点击“查询可回放范围”。</p>
+    {% endif %}
+    {% else %}
+    <div class="empty"><strong>该 Group 暂无订阅 Topic</strong>消费者注册订阅关系后才能重置位点。</div>
+    {% endif %}
+  </div>
+</div>
+
+{% if topics %}
+<div class="card">
+  <div class="card-head">
+    <h2>重置位点</h2>
+    <span class="badge badge-danger">高风险操作</span>
+  </div>
+  <div class="card-body">
+    <div class="flash flash-warning">
+      重置后 Group 会从“最新位点”或“指定时间”重新消费，可能产生重复消费。请确认下游业务具备幂等处理能力。
+    </div>
+    <form method="post" action="/groups/{{ group.group_id|urlencode }}/reset-offset{{ instance_qs }}" data-once>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Topic <span class="required">*</span></span>
+          <select class="select" name="topic" required>
+            {% for item in topics %}
+            <option value="{{ item }}" {{ 'selected' if item == selected_topic else '' }}>{{ item }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">重置方式 <span class="required">*</span></span>
+          <select class="select" name="reset_type">
+            <option value="LATEST_OFFSET" {{ 'selected' if reset_type == 'LATEST_OFFSET' else '' }}>最新位点（跳过当前堆积）</option>
+            <option value="SPECIFIED_TIME" {{ 'selected' if reset_type == 'SPECIFIED_TIME' else '' }}>指定时间（从该时间重新消费）</option>
+          </select>
+        </label>
+
+        {{ datetime_field("reset_time", "回放时间", reset_time) }}
+        <span class="field-help span-2">仅在“指定时间”方式下使用；时间按北京时间解释。</span>
+
+        <label class="field span-2">
+          <span class="field-label">输入 Group ID 以确认 <span class="required">*</span></span>
+          <input class="input mono" type="text" name="confirm_name" value="{{ confirm_name }}"
+                 required autocomplete="off" placeholder="{{ group.group_id }}">
+          <span class="field-help">目标：<code>{{ group.group_id }}</code></span>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-danger" type="submit" data-busy-text="重置中…">确认重置位点</button>
+        <a class="btn btn-ghost" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

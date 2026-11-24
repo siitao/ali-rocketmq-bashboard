@@ -31,6 +31,18 @@
       即将删除 Topic <code>{{ topic.name }}</code>（{{ topic.message_type|msg_type }}）。
       删除后使用该 Topic 的生产者和消费者将无法继续收发消息，已写入的消息也将无法通过该 Topic 查询。
     </div>
+    {% if subscriptions_error %}
+    <div class="flash flash-warning">订阅关系读取失败：{{ subscriptions_error }}</div>
+    {% elif topic_subscriptions %}
+    <div class="flash flash-warning">
+      <strong>影响范围：</strong>以下 {{ topic_subscriptions|length }} 个 Consumer Group 正在订阅该 Topic，删除后它们的订阅关系将失效。
+      <div class="mt-16">
+        {% for item in topic_subscriptions %}
+        <a class="badge badge-warning" href="/groups/{{ item.consumer_group_id|urlencode }}{{ instance_qs }}">{{ item.consumer_group_id }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
     <form method="post" action="{{ action_url }}{{ instance_qs }}" data-once>
       <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
       <label class="field">

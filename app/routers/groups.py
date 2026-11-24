@@ -13,16 +13,67 @@ from ..deps import get_service, resolve_instance_id
 from ..models import User
 from ..security import read_form_with_csrf
 from ..service_errors import ServiceError
-from ..web import client_ip, common_context, flash, instance_query, render
+from ..web import (
+    client_ip,
+    common_context,
+    flash,
+    instance_query,
+    parse_local_datetime,
+    render,
+)
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 PAGE_SIZE = 50
 ORDER_TYPES = ["Concurrently", "Orderly"]
+RESET_TYPES = {"LATEST_OFFSET", "SPECIFIED_TIME"}
 
 
 def _nav(service, instance_id: str) -> dict:
     return common_context(service.list_instances(), instance_id, "groups")
+
+
+def _reset_context(
+    service,
+    instance_id: str,
+    group_id: str,
+    *,
+    topic: str = "",
+    preview: bool = False,
+) -> dict:
+    group = service.get_group(instance_id, group_id)
+    subscriptions = []
+    subscriptions_error = None
+    try:
+        subscriptions = service.list_subscriptions(instance_id, group_id)
+    except ServiceError as exc:
+        subscriptions_error = exc.message
+
+    topics = [subscription.topic_name for subscription in subscriptions]
+    selected_topic = (topic or "").strip()
+    if selected_topic and selected_topic not in topics:
+        selected_topic = ""
+    if not selected_topic and topics:
+        selected_topic = topics[0]
+
+    timespan = None
+    timespan_error = None
+    if preview and selected_topic:
+        try:
+            timespan = service.get_consume_timespan(
+                instance_id, group_id, selected_topic
+            )
+        except ServiceError as exc:
+            timespan_error = exc.message
+
+    return {
+        "group": group,
+        "topics": topics,
+        "subscriptions_error": subscriptions_error,
+        "selected_topic": selected_topic,
+        "timespan": timespan,
+        "timespan_error": timespan_error,
+    }
 
 
 def _form_values(form) -> dict:
@@ -209,6 +260,13 @@ def group_detail(
     except ServiceError as exc:
         subs_error = exc.message
 
+    connections = []
+    connections_error = None
+    try:
+        connections = service.list_consumer_connections(instance_id, group_id)
+    except ServiceError as exc:
+        connections_error = exc.message
+
     lag = None
     lag_error = None
     try:
@@ -224,6 +282,8 @@ def group_detail(
         group=group,
         subscriptions=subscriptions,
         subs_error=subs_error,
+        connections=connections,
+        connections_error=connections_error,
         lag=lag,
         lag_error=lag_error,
     )
@@ -349,6 +409,203 @@ async def update_group(
         ip=client_ip(request),
     )
     flash(request, f"Group {group_id} 已更新")
+    return RedirectResponse(
+        f"/groups/{quote(group_id, safe='')}{instance_query(instance_id)}",
+        status_code=303,
+    )
+
+
+@router.get("/{group_id}/consumers/{client_id}/stack")
+def consumer_stack(
+    request: Request,
+    group_id: str,
+    client_id: str,
+    instance: str | None = None,
+    user: User = Depends(require_permission("consumer:stack")),
+    db: Session = Depends(get_db),
+    service=Depends(get_service),
+):
+    instance_id = resolve_instance_id(instance, service)
+    group = service.get_group(instance_id, group_id)
+    try:
+        stacks = service.get_consumer_stack(instance_id, group_id, client_id)
+    except ServiceError as exc:
+        write_audit(
+            db,
+            username=user.username,
+            action="consumer.stack",
+            instance_id=instance_id,
+            target=client_id,
+            params={"group_id": group_id},
+            result="failure",
+            error_code=exc.code,
+            ip=client_ip(request),
+        )
+        raise
+
+    write_audit(
+        db,
+        username=user.username,
+        action="consumer.stack",
+        instance_id=instance_id,
+        target=client_id,
+        params={"group_id": group_id},
+        ip=client_ip(request),
+    )
+    return render(
+        request,
+        "groups/stack.html",
+        user=user,
+        **_nav(service, instance_id),
+        group=group,
+        client_id=client_id,
+        stacks=stacks,
+    )
+
+
+@router.get("/{group_id}/reset-offset")
+def reset_offset_page(
+    request: Request,
+    group_id: str,
+    instance: str | None = None,
+    topic: str = "",
+    preview: int = 0,
+    user: User = Depends(require_permission("group:reset_offset")),
+    service=Depends(get_service),
+):
+    instance_id = resolve_instance_id(instance, service)
+    context = _reset_context(
+        service,
+        instance_id,
+        group_id,
+        topic=topic,
+        preview=bool(preview),
+    )
+    return render(
+        request,
+        "groups/reset_offset.html",
+        user=user,
+        **_nav(service, instance_id),
+        **context,
+        reset_type="LATEST_OFFSET",
+        reset_time="",
+        confirm_name="",
+        error=None,
+        preview=bool(preview),
+    )
+
+
+@router.post("/{group_id}/reset-offset")
+async def reset_offset(
+    request: Request,
+    group_id: str,
+    instance: str | None = None,
+    user: User = Depends(require_permission("group:reset_offset")),
+    db: Session = Depends(get_db),
+    service=Depends(get_service),
+):
+    instance_id = resolve_instance_id(instance, service)
+    form = await read_form_with_csrf(request)
+    topic = (form.get("topic") or "").strip()
+    reset_type = (form.get("reset_type") or "LATEST_OFFSET").strip()
+    reset_time_raw = (form.get("reset_time") or "").strip()
+    confirm_name = (form.get("confirm_name") or "").strip()
+    reset_time = (
+        parse_local_datetime(reset_time_raw)
+        if reset_type == "SPECIFIED_TIME"
+        else None
+    )
+
+    context = _reset_context(service, instance_id, group_id, topic=topic)
+    error = None
+    if confirm_name != group_id:
+        error = "输入的 Group ID 不一致，未执行位点重置"
+    elif topic not in context["topics"]:
+        error = "请选择该 Group 已订阅的 Topic"
+    elif reset_type not in RESET_TYPES:
+        error = "不支持的位点重置方式"
+    elif reset_type == "SPECIFIED_TIME" and reset_time is None:
+        error = "按指定时间回放时，请选择有效的时间"
+
+    params = {
+        "topic": topic,
+        "reset_type": reset_type,
+        "reset_time": (
+            reset_time.strftime("%Y-%m-%d %H:%M:%S") if reset_time else reset_time_raw
+        ),
+    }
+    if error is not None:
+        write_audit(
+            db,
+            username=user.username,
+            action="group.reset_offset",
+            instance_id=instance_id,
+            target=group_id,
+            params=params,
+            result="failure",
+            error_code=(
+                "ConfirmationMismatch" if confirm_name != group_id else "ValidationError"
+            ),
+            ip=client_ip(request),
+        )
+        return render(
+            request,
+            "groups/reset_offset.html",
+            user=user,
+            **_nav(service, instance_id),
+            **context,
+            reset_type=reset_type,
+            reset_time=reset_time_raw,
+            confirm_name=confirm_name,
+            error=error,
+            preview=False,
+            status_code=400,
+        )
+
+    try:
+        service.reset_consume_offset(
+            instance_id,
+            group_id,
+            topic,
+            reset_type=reset_type,
+            reset_time=reset_time,
+        )
+    except ServiceError as exc:
+        write_audit(
+            db,
+            username=user.username,
+            action="group.reset_offset",
+            instance_id=instance_id,
+            target=group_id,
+            params=params,
+            result="failure",
+            error_code=exc.code,
+            ip=client_ip(request),
+        )
+        return render(
+            request,
+            "groups/reset_offset.html",
+            user=user,
+            **_nav(service, instance_id),
+            **context,
+            reset_type=reset_type,
+            reset_time=reset_time_raw,
+            confirm_name=confirm_name,
+            error=exc.message,
+            preview=False,
+            status_code=exc.status_code,
+        )
+
+    write_audit(
+        db,
+        username=user.username,
+        action="group.reset_offset",
+        instance_id=instance_id,
+        target=group_id,
+        params=params,
+        ip=client_ip(request),
+    )
+    flash(request, f"Group {group_id} 的 {topic} 消费位点已重置")
     return RedirectResponse(
         f"/groups/{quote(group_id, safe='')}{instance_query(instance_id)}",
         status_code=303,

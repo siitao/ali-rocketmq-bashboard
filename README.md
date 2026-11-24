@@ -6,17 +6,22 @@
 
 ## 功能
 
-- **只读看板**：实例状态、Topic/Group 数量、实例信息、接入点
+- **只读看板**：实例状态、Topic/Group 数量、实例信息、接入点、认证模式、配额
 - **Topic 管理**：列表/搜索、详情、创建、修改、删除（删除仅管理员，需输入名称确认）
 - **Consumer Group 管理**：列表/搜索、详情、创建、修改、删除（同上）
 - **消费堆积**：`GetConsumerGroupLag`，按 Topic 展示待消费/处理中/投递延迟
-- **订阅关系**：`ListConsumerGroupSubscriptions`
+- **在线消费者与线程栈**：`ListConsumerConnections` / `GetConsumerStack`，线程栈仅 operator/admin
+- **订阅关系**：`ListConsumerGroupSubscriptions`，并支持从 Topic 反查订阅它的 Group
 - **消息查询**：按 Topic + 时间范围 / msgId / Key 检索，`GetMessageDetail` 查看消息体与属性
+- **消息轨迹**：`GetTrace`，展示生产者、服务端处理、消费者链路和死信信息
+- **消费位点重置**：`ResetConsumeOffset`，仅管理员，支持最新位点或指定时间，需输入 Group ID 确认
 - **账号与权限**：本地账号，viewer / operator / admin 三角色，服务端 RBAC
-- **审计日志**：登录、查询、增删改全部落库，记录用户、实例、对象、结果、IP、参数（不记录消息体）
+- **审计日志**：登录、查询、增删改、轨迹/线程栈/位点重置全部落库，记录用户、实例、对象、结果、IP、参数（不记录消息体）
 - **安全**：argon2id 密码、签名会话、CSRF、登录限流、CSP、实例白名单
 
-不包含（v1）：消息收发、消费位点重置、告警图表、自助注册、多地域。
+不包含：消息收发、死信重发、告警图表、自助注册、多地域。
+
+> 消息轨迹需要实例已开启轨迹功能；线程栈取决于客户端版本，部分老客户端可能没有数据。
 
 ## 架构
 
@@ -189,7 +194,8 @@ HTTPS 部署还应设置 `COOKIE_SECURE=true`，并确保上面的代理头配�
 - 所有 HTML 响应设置 `Cache-Control: no-store`，避免消息内容/审计日志留在浏览器缓存。
 - Nginx 示例包含 TLS 1.2/1.3、HSTS，并覆盖 `X-Forwarded-For` 防止来源伪造。
 - 消息查询需要 `message:query`（viewer 默认有）；查询条件和 msgId 会审计，**消息体不写审计日志**。
-- 删除 Topic/Group 仅 admin 可用，必须输入完整名称确认，操作不可恢复。
+- 消息轨迹需要 `message:trace`（viewer 默认有）；线程栈需要 `consumer:stack`（operator/admin）；重置位点需要 `group:reset_offset`（仅 admin）。
+- 删除 Topic/Group 仅 admin 可用，必须输入完整名称确认，操作不可恢复；重置位点同样仅 admin 且需输入 Group ID 确认。
 - `.env` 中的长期 AK 仅用于本地调试：请使用专用 RAM 用户、最小权限并在泄露风险出现时轮换；生产环境删除 AK，改用 ECS 实例 RAM 角色。
 - `data/dev.db` 是本地演示库（含弱密码演示账号），不要复制到生产环境或共享备份。
 - 上线步骤建议：

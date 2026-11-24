@@ -14,6 +14,10 @@
     <p class="page-subtitle mono">{{ message.msg_id }}</p>
   </div>
   <div class="page-actions">
+    {% set trace_link = "/messages/" ~ (message.msg_id|urlencode) ~ "/trace?topic=" ~ (topic|urlencode) ~ ("&instance=" ~ (instance_id|urlencode) if instance_id else "") ~ ("&start=" ~ (trace_start|urlencode) if trace_start else "") ~ ("&end=" ~ (trace_end|urlencode) if trace_end else "") %}
+    {% if can(user.role, 'message:trace') %}
+    <a class="btn" href="{{ trace_link }}">消息轨迹</a>
+    {% endif %}
     <button class="btn" type="button" data-copy="#msg-id-value">复制 Message ID</button>
     <a class="btn btn-ghost" href="{{ back_link }}">返回查询</a>
   </div>

@@ -11,6 +11,9 @@ PERMISSIONS = {
     "group:update": "operator",
     "group:delete": "admin",
     "message:query": "viewer",
+    "message:trace": "viewer",
+    "consumer:stack": "operator",
+    "group:reset_offset": "admin",
     "user:manage": "admin",
     "audit:view": "admin",
 }

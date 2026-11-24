@@ -81,14 +81,93 @@
         <div class="detail-value">{{ info.create_time or '-' }}</div>
       </div>
       <div class="detail-item">
-        <div class="detail-label">接入点</div>
-        <div class="detail-value mono">{{ info.endpoints or '打开实例详情页时由阿里云返回' }}</div>
-      </div>
-      <div class="detail-item">
         <div class="detail-label">备注</div>
         <div class="detail-value">{{ info.description or '-' }}</div>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>接入点与访问控制</h2>
+    <span class="card-sub">只读信息 · 不展示实例密码</span>
+  </div>
+  <div class="card-body">
+    <div class="section-title">
+      <span>接入点</span>
+      <span class="card-sub">TCP / HTTP 协议不可混用</span>
+    </div>
+    {% if info.endpoint_list %}
+    <div class="endpoint-list">
+      {% for endpoint in info.endpoint_list %}
+      <div class="endpoint-row">
+        <span class="badge badge-neutral">{{ endpoint.endpoint_type or '接入点' }}</span>
+        <span class="mono endpoint-url" id="endpoint-{{ loop.index }}">{{ endpoint.endpoint_url or '-' }}</span>
+        <button class="btn btn-ghost btn-sm" type="button" data-copy="#endpoint-{{ loop.index }}">复制</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">{{ info.endpoints or '暂无接入点信息' }}</p>
+    {% endif %}
+
+    <div class="detail-grid mt-16">
+      <div class="detail-item">
+        <div class="detail-label">认证模式</div>
+        <div class="detail-value">{{ info.acl_type|acl_type }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">认证类型</div>
+        <div class="detail-value">{{ info.acl_types|join('、') if info.acl_types else '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">VPC 默认免鉴权</div>
+        <div class="detail-value">{{ '是' if info.default_vpc_auth_free else ('否' if info.default_vpc_auth_free is not none else '-') }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">实例账号</div>
+        <div class="detail-value mono">{{ info.account_username or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">消息保留</div>
+        <div class="detail-value">{{ info.retention_hours ~ ' 小时' if info.retention_hours is not none else '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">消息轨迹</div>
+        <div class="detail-value">{{ '已开启' if info.trace_on else ('未开启' if info.trace_on is not none else '未知') }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">云盘加密</div>
+        <div class="detail-value">{{ '已开启' if info.storage_encryption else ('未开启' if info.storage_encryption is not none else '未知') }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>实例配额</h2>
+    <span class="card-sub">来自实例详情</span>
+  </div>
+  <div class="card-body">
+    {% if info.quotas %}
+    <div class="quota-list">
+      {% for quota in info.quotas %}
+      <div class="quota-row">
+        <div class="quota-head">
+          <span>{{ quota.quota_name }}</span>
+          <span class="cell-muted">{{ quota.used_count|number }} / {{ quota.total_count|number }}</span>
+        </div>
+        {% if quota.total_count %}
+        <progress class="quota-progress" value="{{ quota.used_count or 0 }}" max="{{ quota.total_count }}"></progress>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">暂无配额信息</p>
+    {% endif %}
   </div>
 </div>
 

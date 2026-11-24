@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}消费线程栈 · {{ group.group_id }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="/groups{{ instance_qs }}">Consumer Groups</a>
+  <span class="sep">/</span>
+  <a class="mono" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">{{ group.group_id }}</a>
+  <span class="sep">/</span>
+  <span>线程栈</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>消费线程栈</h1>
+    <p class="page-subtitle mono">{{ client_id }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="/groups/{{ group.group_id|urlencode }}{{ instance_qs }}">返回 Group</a>
+  </div>
+</div>
+
+<div class="flash flash-warning">
+  线程栈可能包含内部类名和调用路径，仅用于排障；本次查看已记录审计日志。
+</div>
+
+{% if stacks %}
+  {% for stack in stacks %}
+  <div class="card">
+    <div class="card-head">
+      <h2 class="mono">{{ stack.thread or '未命名线程' }}</h2>
+      <span class="card-sub">{{ stack.tracks|length }} 帧</span>
+    </div>
+    <div class="card-body">
+      {% if stack.tracks %}
+      <pre class="code-block">{{ stack.tracks|join('\n') }}</pre>
+      {% else %}
+      <div class="empty"><strong>无调用栈内容</strong></div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card">
+  <div class="empty">
+    <strong>没有线程栈数据</strong>
+    客户端可能已下线，或该客户端版本不支持线程栈。
+  </div>
+</div>
+{% endif %}
+{% endblock %}

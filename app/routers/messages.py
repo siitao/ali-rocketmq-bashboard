@@ -202,6 +202,17 @@ def message_detail(
         params={"topic": topic},
         ip=client_ip(request),
     )
+
+    trace_start = ""
+    trace_end = ""
+    if message.store_time:
+        try:
+            stored = datetime.strptime(message.store_time, "%Y-%m-%d %H:%M:%S")
+            trace_start = (stored - timedelta(hours=1)).strftime(TIME_INPUT_FORMAT)
+            trace_end = (stored + timedelta(hours=1)).strftime(TIME_INPUT_FORMAT)
+        except ValueError:
+            pass
+
     return render(
         request,
         "messages/detail.html",
@@ -209,4 +220,98 @@ def message_detail(
         **_nav(service, instance_id),
         message=message,
         topic=topic,
+        trace_start=trace_start,
+        trace_end=trace_end,
+    )
+
+
+@router.get("/{msg_id}/trace")
+def message_trace(
+    request: Request,
+    msg_id: str,
+    topic: str = "",
+    instance: str | None = None,
+    start: str = "",
+    end: str = "",
+    user: User = Depends(require_permission("message:trace")),
+    db: Session = Depends(get_db),
+    service=Depends(get_service),
+):
+    settings = get_settings()
+    instance_id = resolve_instance_id(instance, service)
+    topic = topic.strip()
+    if not topic:
+        raise AppError("缺少 Topic 参数，无法查看消息轨迹", status_code=400)
+
+    now = datetime.now(SHANGHAI).replace(second=0, microsecond=0)
+    start_dt = _parse_dt(start) if start else now - timedelta(hours=1)
+    end_dt = _parse_dt(end) if end else now
+    error = None
+    if start and start_dt is None:
+        error = "开始时间格式不正确"
+    elif end and end_dt is None:
+        error = "结束时间格式不正确"
+    elif start_dt is not None and end_dt is not None:
+        if end_dt <= start_dt:
+            error = "结束时间必须晚于开始时间"
+        elif end_dt - start_dt > timedelta(hours=settings.max_message_query_hours):
+            error = f"查询时间范围不能超过 {settings.max_message_query_hours} 小时"
+
+    trace = None
+    if error is None:
+        try:
+            trace = service.get_message_trace(
+                instance_id,
+                topic,
+                msg_id,
+                start_dt,
+                end_dt,
+            )
+        except ServiceError as exc:
+            error = exc.message
+            write_audit(
+                db,
+                username=user.username,
+                action="message.trace",
+                instance_id=instance_id,
+                target=msg_id,
+                params={
+                    "topic": topic,
+                    "start": start_dt.strftime("%Y-%m-%d %H:%M:%S") if start_dt else "",
+                    "end": end_dt.strftime("%Y-%m-%d %H:%M:%S") if end_dt else "",
+                },
+                result="failure",
+                error_code=exc.code,
+                ip=client_ip(request),
+            )
+        else:
+            write_audit(
+                db,
+                username=user.username,
+                action="message.trace",
+                instance_id=instance_id,
+                target=msg_id,
+                params={
+                    "topic": topic,
+                    "start": start_dt.strftime("%Y-%m-%d %H:%M:%S") if start_dt else "",
+                    "end": end_dt.strftime("%Y-%m-%d %H:%M:%S") if end_dt else "",
+                },
+                ip=client_ip(request),
+            )
+
+    start_value = start or (start_dt.strftime(TIME_INPUT_FORMAT) if start_dt else "")
+    end_value = end or (end_dt.strftime(TIME_INPUT_FORMAT) if end_dt else "")
+
+    return render(
+        request,
+        "messages/trace.html",
+        user=user,
+        **_nav(service, instance_id),
+        msg_id=msg_id,
+        topic=topic,
+        trace=trace,
+        start_value=start_value,
+        end_value=end_value,
+        error=error,
+        max_hours=settings.max_message_query_hours,
     )

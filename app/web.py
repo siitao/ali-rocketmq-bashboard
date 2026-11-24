@@ -37,11 +37,34 @@ templates.env.filters["dt"] = format_dt
 
 def status_class(value: str | None) -> str:
     normalized = (value or "").upper()
-    if normalized in {"RUNNING", "ACTIVE", "NORMAL", "OK", "ENABLED"}:
+    if normalized in {
+        "RUNNING",
+        "ACTIVE",
+        "NORMAL",
+        "OK",
+        "ENABLED",
+        "SUCCESS",
+        "ONLINE",
+        "CONSISTENT",
+    }:
         return "badge-success"
-    if normalized in {"CREATING", "PENDING", "UPDATING", "CONFIGURING"}:
+    if normalized in {
+        "CREATING",
+        "PENDING",
+        "UPDATING",
+        "CONFIGURING",
+        "PARTIAL",
+        "INCONSISTENT",
+    }:
         return "badge-warning"
-    if normalized in {"FAILED", "ERROR", "RELEASED", "DELETED", "DISABLED"}:
+    if normalized in {
+        "FAILED",
+        "ERROR",
+        "RELEASED",
+        "DELETED",
+        "DISABLED",
+        "OFFLINE",
+    }:
         return "badge-danger"
     return "badge-neutral"
 
@@ -115,6 +138,9 @@ ACTION_LABELS = {
     "group.delete": "删除 Group",
     "message.query": "查询消息",
     "message.detail": "查看消息详情",
+    "message.trace": "查看消息轨迹",
+    "consumer.stack": "查看消费线程栈",
+    "group.reset_offset": "重置消费位点",
     "user.create": "创建用户",
     "user.role": "修改用户角色",
     "user.enable": "启用用户",
@@ -138,10 +164,40 @@ def epoch_ms(value) -> str:
         return str(value)
     if milliseconds <= 0:
         return "-"
+    if milliseconds < 10_000_000_000:
+        milliseconds *= 1000
     try:
-        return datetime.fromtimestamp(milliseconds / 1000, tz=SHANGHAI).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(milliseconds / 1000, tz=SHANGHAI).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
     except (OSError, OverflowError):
         return str(value)
+
+
+def parse_local_datetime(value: str | None) -> datetime | None:
+    """Parse datetime-local / API time strings as Beijing time."""
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=SHANGHAI)
+        except ValueError:
+            continue
+    return None
+
+
+ACL_TYPE_LABELS = {
+    "INTELLIGENT": "智能身份识别",
+    "DEFAULT": "智能身份识别（默认）",
+    "ACL": "ACL 身份识别",
+    "NO_ACL": "未开启",
+}
+
+
+def acl_type_label(value: str | None) -> str:
+    if not value:
+        return "-"
+    return ACL_TYPE_LABELS.get(value.upper(), value)
 
 
 templates.env.filters["order_type"] = order_type_label
@@ -150,6 +206,7 @@ templates.env.filters["duration"] = duration_label
 templates.env.filters["number"] = number
 templates.env.filters["epoch_ms"] = epoch_ms
 templates.env.filters["action_label"] = action_label
+templates.env.filters["acl_type"] = acl_type_label
 
 
 def instance_query(instance_id: str | None) -> str:

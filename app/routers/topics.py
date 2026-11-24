@@ -25,6 +25,13 @@ def _nav(service, instance_id: str) -> dict:
     return common_context(service.list_instances(), instance_id, "topics")
 
 
+def _topic_subscriptions(service, instance_id: str, topic_name: str):
+    try:
+        return service.list_topic_subscriptions(instance_id, topic_name), None
+    except ServiceError as exc:
+        return [], exc.message
+
+
 def _form_values(form) -> dict:
     return {
         "name": (form.get("name") or "").strip(),
@@ -181,12 +188,17 @@ def topic_detail(
 ):
     instance_id = resolve_instance_id(instance, service)
     topic = service.get_topic(instance_id, topic_name)
+    topic_subscriptions, subscriptions_error = _topic_subscriptions(
+        service, instance_id, topic_name
+    )
     return render(
         request,
         "topics/detail.html",
         user=user,
         **_nav(service, instance_id),
         topic=topic,
+        topic_subscriptions=topic_subscriptions,
+        subscriptions_error=subscriptions_error,
         message_types=MESSAGE_TYPES,
     )
 
@@ -318,12 +330,17 @@ def delete_topic_page(
 ):
     instance_id = resolve_instance_id(instance, service)
     topic = service.get_topic(instance_id, topic_name)
+    topic_subscriptions, subscriptions_error = _topic_subscriptions(
+        service, instance_id, topic_name
+    )
     return render(
         request,
         "topics/delete.html",
         user=user,
         **_nav(service, instance_id),
         topic=topic,
+        topic_subscriptions=topic_subscriptions,
+        subscriptions_error=subscriptions_error,
         error=None,
     )
 
@@ -341,6 +358,9 @@ async def delete_topic(
     form = await read_form_with_csrf(request)
     confirm_name = (form.get("confirm_name") or "").strip()
     topic = service.get_topic(instance_id, topic_name)
+    topic_subscriptions, subscriptions_error = _topic_subscriptions(
+        service, instance_id, topic_name
+    )
 
     if confirm_name != topic_name:
         write_audit(
@@ -359,6 +379,8 @@ async def delete_topic(
             user=user,
             **_nav(service, instance_id),
             topic=topic,
+            topic_subscriptions=topic_subscriptions,
+            subscriptions_error=subscriptions_error,
             error="输入的 Topic 名称不一致，未执行删除",
             status_code=400,
         )
@@ -382,6 +404,8 @@ async def delete_topic(
             user=user,
             **_nav(service, instance_id),
             topic=topic,
+            topic_subscriptions=topic_subscriptions,
+            subscriptions_error=subscriptions_error,
             error=exc.message,
             status_code=exc.status_code,
         )

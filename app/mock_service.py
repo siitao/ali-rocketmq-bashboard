@@ -10,14 +10,25 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from .aliyun_types import (
+    ConsumeTimespanInfo,
+    ConsumerConnectionInfo,
+    ConsumerStackInfo,
     GroupInfo,
+    InstanceEndpointInfo,
     InstanceInfo,
+    InstanceQuotaInfo,
     LagInfo,
     MessageInfo,
     Page,
     SubscriptionInfo,
     TopicInfo,
     TopicLagInfo,
+    TopicSubscriptionInfo,
+    TraceConsumerInfo,
+    TraceConsumerRecordInfo,
+    TraceInfo,
+    TraceOperationInfo,
+    TraceProducerInfo,
 )
 from .service_errors import InstanceNotAllowed, ServiceError, ValidationError
 
@@ -42,6 +53,9 @@ class MockRocketMQService:
         self._groups: dict[str, dict[str, GroupInfo]] = {}
         self._subscriptions: dict[str, dict[str, list[SubscriptionInfo]]] = {}
         self._lag: dict[str, dict[str, dict[str, int]]] = {}
+        self._connections: dict[str, dict[str, list[ConsumerConnectionInfo]]] = {}
+        self._stacks: dict[str, dict[str, list[ConsumerStackInfo]]] = {}
+        self._consume_timespans: dict[str, dict[str, dict[str, ConsumeTimespanInfo]]] = {}
         self._messages: list[MessageInfo] = []
         self._seed()
 
@@ -63,11 +77,33 @@ class MockRocketMQService:
                 description="本地 Mock 实例（MOCK_ALIYUN=1）",
                 endpoints=f"http://{instance_id}.mock.local:8080",
                 create_time=_fmt(now - timedelta(days=90)),
+                endpoint_list=[
+                    InstanceEndpointInfo(
+                        endpoint_type="TCP",
+                        endpoint_url=f"{instance_id}.mock.local:8080",
+                        ip_whitelist=["10.0.0.0/8"],
+                    ),
+                    InstanceEndpointInfo(
+                        endpoint_type="HTTP",
+                        endpoint_url=f"http://{instance_id}.mock.local:8080",
+                        ip_whitelist=["10.0.0.0/8"],
+                    ),
+                ],
+                acl_type="智能身份识别",
+                acl_types=["INTELLIGENT"],
+                default_vpc_auth_free=True,
+                account_username="mock-user",
+                retention_hours=72,
+                trace_on=True,
+                storage_encryption=False,
             )
             self._topics[instance_id] = {}
             self._groups[instance_id] = {}
             self._subscriptions[instance_id] = {}
             self._lag[instance_id] = {}
+            self._connections[instance_id] = {}
+            self._stacks[instance_id] = {}
+            self._consume_timespans[instance_id] = {}
 
         instance_id = self._instance_ids[0]
         seed_topics = [
@@ -128,6 +164,80 @@ class MockRocketMQService:
             )
             self._lag[instance_id][group_id][topic_name] = lag
 
+        connection_seed = {
+            "order-consumer": [
+                ConsumerConnectionInfo(
+                    client_id="order-consumer-1@mock",
+                    egress_ip="10.0.0.11",
+                    hostname="order-app-1",
+                    language="JAVA",
+                    version="5.0.8",
+                    message_model="CLUSTERING",
+                ),
+                ConsumerConnectionInfo(
+                    client_id="order-consumer-2@mock",
+                    egress_ip="10.0.0.12",
+                    hostname="order-app-2",
+                    language="GO",
+                    version="5.0.4",
+                    message_model="CLUSTERING",
+                ),
+            ],
+            "payment-consumer": [
+                ConsumerConnectionInfo(
+                    client_id="payment-consumer-1@mock",
+                    egress_ip="10.0.0.21",
+                    hostname="payment-app-1",
+                    language="JAVA",
+                    version="5.0.8",
+                    message_model="CLUSTERING",
+                )
+            ],
+            "inventory-consumer": [
+                ConsumerConnectionInfo(
+                    client_id="inventory-consumer-1@mock",
+                    egress_ip="10.0.0.31",
+                    hostname="inventory-app-1",
+                    language="JAVA",
+                    version="5.0.8",
+                    message_model="CLUSTERING",
+                )
+            ],
+        }
+        for group_id, connections in connection_seed.items():
+            self._connections[instance_id][group_id] = connections
+            for connection in connections:
+                self._stacks[instance_id][connection.client_id] = [
+                    ConsumerStackInfo(
+                        thread="ConsumeMessageThread_1",
+                        tracks=[
+                            "at com.example.mq.OrderListener.onMessage(OrderListener.java:42)",
+                            "at org.apache.rocketmq.client.impl.consumer.ConsumeMessageConcurrentlyService$ConsumeRequest.run(ConsumeMessageConcurrentlyService.java:421)",
+                        ],
+                    ),
+                    ConsumerStackInfo(
+                        thread="ConsumeMessageThread_2",
+                        tracks=[
+                            "at java.lang.Object.wait(Native Method)",
+                            "at org.apache.rocketmq.client.impl.consumer.ConsumeMessageConcurrentlyService$ConsumeRequest.run(ConsumeMessageConcurrentlyService.java:430)",
+                        ],
+                    ),
+                ]
+
+        base_ms = int(now.timestamp() * 1000)
+        for group_id, subscriptions in self._subscriptions[instance_id].items():
+            self._consume_timespans[instance_id][group_id] = {}
+            for subscription in subscriptions:
+                self._consume_timespans[instance_id][group_id][subscription.topic_name] = (
+                    ConsumeTimespanInfo(
+                        consumer_group_id=group_id,
+                        topic_name=subscription.topic_name,
+                        consume_timestamp=base_ms - 5 * 60 * 1000,
+                        min_timestamp=base_ms - 2 * 3600 * 1000,
+                        max_timestamp=base_ms - 60 * 1000,
+                    )
+                )
+
         payloads = [
             ("order-events", "OrderCreated", "order-1001", {"orderId": "1001", "amount": 128.0, "status": "CREATED"}),
             ("order-events", "OrderPaid", "order-1001", {"orderId": "1001", "amount": 128.0, "status": "PAID"}),
@@ -167,8 +277,23 @@ class MockRocketMQService:
                 )
             )
         self._messages.sort(key=lambda item: item.store_time, reverse=True)
-        self._instances[instance_id].topic_count = len(self._topics[instance_id])
-        self._instances[instance_id].group_count = len(self._groups[instance_id])
+        instance = self._instances[instance_id]
+        instance.topic_count = len(self._topics[instance_id])
+        instance.group_count = len(self._groups[instance_id])
+        instance.quotas = [
+            InstanceQuotaInfo(
+                quota_name="Topic 数量",
+                total_count=50,
+                used_count=instance.topic_count,
+            ),
+            InstanceQuotaInfo(
+                quota_name="Group 数量",
+                total_count=50,
+                used_count=instance.group_count,
+            ),
+            InstanceQuotaInfo(quota_name="发送 TPS", total_count=5000, used_count=1200),
+            InstanceQuotaInfo(quota_name="消费 TPS", total_count=5000, used_count=800),
+        ]
 
     # ------------------------------------------------------------- internals
 
@@ -409,6 +534,100 @@ class MockRocketMQService:
             topics=topics,
         )
 
+    def list_consumer_connections(
+        self, instance_id: str, group_id: str
+    ) -> list[ConsumerConnectionInfo]:
+        with self._lock:
+            self._groups_for(instance_id)
+            if group_id not in self._groups[instance_id]:
+                raise ServiceError(f"Group {group_id} 不存在", code="ConsumerGroupNotFound", status_code=404)
+            return list(self._connections[instance_id].get(group_id, []))
+
+    def get_consumer_stack(
+        self, instance_id: str, group_id: str, client_id: str
+    ) -> list[ConsumerStackInfo]:
+        with self._lock:
+            self._groups_for(instance_id)
+            if group_id not in self._groups[instance_id]:
+                raise ServiceError(f"Group {group_id} 不存在", code="ConsumerGroupNotFound", status_code=404)
+            connections = self._connections[instance_id].get(group_id, [])
+            if client_id not in {connection.client_id for connection in connections}:
+                raise ServiceError(
+                    f"消费者 {client_id} 不在线", code="ConsumerNotFound", status_code=404
+                )
+            return list(self._stacks[instance_id].get(client_id, []))
+
+    def list_topic_subscriptions(
+        self, instance_id: str, topic_name: str
+    ) -> list[TopicSubscriptionInfo]:
+        with self._lock:
+            topics = self._topics_for(instance_id)
+            if topic_name not in topics:
+                raise ServiceError(f"Topic {topic_name} 不存在", code="TopicNotFound", status_code=404)
+            result = []
+            for group_id, subscriptions in sorted(self._subscriptions[instance_id].items()):
+                for subscription in subscriptions:
+                    if subscription.topic_name != topic_name:
+                        continue
+                    result.append(
+                        TopicSubscriptionInfo(
+                            consumer_group_id=group_id,
+                            topic_name=topic_name,
+                            filter_type=subscription.filter_type,
+                            filter_expression=subscription.filter_expression,
+                            status=subscription.status,
+                            message_model=subscription.message_model,
+                            consistency="CONSISTENT",
+                        )
+                    )
+            return result
+
+    def get_consume_timespan(
+        self, instance_id: str, group_id: str, topic_name: str
+    ) -> ConsumeTimespanInfo | None:
+        with self._lock:
+            self._groups_for(instance_id)
+            if group_id not in self._groups[instance_id]:
+                raise ServiceError(f"Group {group_id} 不存在", code="ConsumerGroupNotFound", status_code=404)
+            timespan = (
+                self._consume_timespans[instance_id]
+                .get(group_id, {})
+                .get(topic_name)
+            )
+            return timespan
+
+    def reset_consume_offset(
+        self,
+        instance_id: str,
+        group_id: str,
+        topic_name: str,
+        *,
+        reset_type: str,
+        reset_time: datetime | None = None,
+    ) -> None:
+        if reset_type not in {"LATEST_OFFSET", "SPECIFIED_TIME"}:
+            raise ValidationError("不支持的位点重置方式")
+        if reset_type == "SPECIFIED_TIME" and reset_time is None:
+            raise ValidationError("按指定时间回放时必须选择时间")
+        with self._lock:
+            self._groups_for(instance_id)
+            if group_id not in self._groups[instance_id]:
+                raise ServiceError(f"Group {group_id} 不存在", code="ConsumerGroupNotFound", status_code=404)
+            subscribed = {
+                subscription.topic_name
+                for subscription in self._subscriptions[instance_id].get(group_id, [])
+            }
+            if topic_name not in subscribed:
+                raise ValidationError("该 Group 未订阅指定 Topic")
+            self._lag[instance_id].setdefault(group_id, {})[topic_name] = 0
+            timespan = (
+                self._consume_timespans[instance_id]
+                .setdefault(group_id, {})
+                .get(topic_name)
+            )
+            if timespan is not None:
+                timespan.consume_timestamp = int(_now().timestamp() * 1000)
+
     # -------------------------------------------------------------- messages
 
     def list_messages(
@@ -454,3 +673,78 @@ class MockRocketMQService:
                 if message.msg_id == msg_id and message.topic_name == topic:
                     return message
         raise ServiceError(f"消息 {msg_id} 不存在", code="MessageNotFound", status_code=404)
+
+    def get_message_trace(
+        self,
+        instance_id: str,
+        topic: str,
+        msg_id: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> TraceInfo | None:
+        self._ensure_allowed(instance_id)
+        with self._lock:
+            message = next(
+                (
+                    item
+                    for item in self._messages
+                    if item.msg_id == msg_id and item.topic_name == topic
+                ),
+                None,
+            )
+            if message is None:
+                return None
+            groups = [
+                group_id
+                for group_id, subscriptions in self._subscriptions[instance_id].items()
+                if any(subscription.topic_name == topic for subscription in subscriptions)
+            ]
+            return TraceInfo(
+                message_id=message.msg_id,
+                topic_name=message.topic_name,
+                tag=message.tag,
+                keys=message.keys,
+                message_type=message.message_type,
+                born_time=message.born_time,
+                store_time=message.store_time,
+                born_host=message.born_host,
+                store_host=message.store_host,
+                producer_records=[
+                    TraceProducerInfo(
+                        arrive_time=message.store_time,
+                        client_host="10.0.0.21",
+                        produce_duration=8,
+                        produce_status="SUCCESS",
+                        produce_time=message.born_time,
+                        user_name="mock-producer",
+                        message_source="SDK",
+                    )
+                ],
+                broker_operations=[
+                    TraceOperationInfo(
+                        operate_type="STORE",
+                        operate_time=message.store_time,
+                    )
+                ],
+                consumer_infos=[
+                    TraceConsumerInfo(
+                        consumer_group_id=group_id,
+                        consume_status="SUCCESS",
+                        records=[
+                            TraceConsumerRecordInfo(
+                                client_host="10.0.0.11",
+                                consume_status="SUCCESS",
+                                fifo_enable=message.message_type == "FIFO",
+                                user_name="mock-consumer",
+                                operations=[
+                                    TraceOperationInfo(
+                                        operate_type="CONSUME",
+                                        operate_time=message.store_time,
+                                    )
+                                ],
+                            )
+                        ],
+                    )
+                    for group_id in groups
+                ],
+            )

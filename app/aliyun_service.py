@@ -22,14 +22,25 @@ from darabonba.exceptions import DaraException
 from Tea.exceptions import TeaException
 
 from .aliyun_types import (
+    ConsumeTimespanInfo,
+    ConsumerConnectionInfo,
+    ConsumerStackInfo,
     GroupInfo,
+    InstanceEndpointInfo,
     InstanceInfo,
+    InstanceQuotaInfo,
     LagInfo,
     MessageInfo,
     Page,
     SubscriptionInfo,
     TopicInfo,
     TopicLagInfo,
+    TopicSubscriptionInfo,
+    TraceConsumerInfo,
+    TraceConsumerRecordInfo,
+    TraceInfo,
+    TraceOperationInfo,
+    TraceProducerInfo,
 )
 from .config import Settings, get_settings
 from .service_errors import InstanceNotAllowed, ServiceError, ValidationError
@@ -209,16 +220,62 @@ class RocketMQService:
     @staticmethod
     def _map_instance_detail(item: Any) -> InstanceInfo:
         instance_id = getattr(item, "instance_id", "") or ""
-        endpoints = ""
+        endpoint_list: list[InstanceEndpointInfo] = []
         network = getattr(item, "network_info", None)
         if network is not None:
-            parts = [
-                f"{getattr(endpoint, 'endpoint_type', '') or 'endpoint'}: "
-                f"{getattr(endpoint, 'endpoint_url', '') or ''}"
-                for endpoint in (getattr(network, "endpoints", None) or [])
-                if getattr(endpoint, "endpoint_url", None)
-            ]
-            endpoints = "；".join(parts)
+            for endpoint in getattr(network, "endpoints", None) or []:
+                endpoint_list.append(
+                    InstanceEndpointInfo(
+                        endpoint_type=getattr(endpoint, "endpoint_type", "") or "",
+                        endpoint_url=getattr(endpoint, "endpoint_url", "") or "",
+                        ip_whitelist=list(getattr(endpoint, "ip_whitelist", None) or []),
+                    )
+                )
+        endpoints = "；".join(
+            f"{endpoint.endpoint_type or 'endpoint'}: {endpoint.endpoint_url}"
+            for endpoint in endpoint_list
+            if endpoint.endpoint_url
+        )
+
+        acl_info = getattr(item, "acl_info", None)
+        account_info = getattr(item, "account_info", None)
+        acl_type = getattr(acl_info, "acl_type", "") if acl_info is not None else ""
+        acl_types = (
+            list(getattr(acl_info, "acl_types", None) or []) if acl_info is not None else []
+        )
+        default_vpc_auth_free = (
+            getattr(acl_info, "default_vpc_auth_free", None) if acl_info is not None else None
+        )
+        account_username = (
+            getattr(account_info, "username", "") if account_info is not None else ""
+        )
+        quotas = [
+            InstanceQuotaInfo(
+                quota_name=getattr(quota, "quota_name", "") or "",
+                free_count=getattr(quota, "free_count", None),
+                total_count=getattr(quota, "total_count", None),
+                used_count=getattr(quota, "used_count", None),
+            )
+            for quota in (getattr(item, "instance_quotas", None) or [])
+        ]
+        product_info = getattr(item, "product_info", None)
+        ext_config = getattr(item, "ext_config", None)
+        retention = (
+            getattr(product_info, "message_retention_time", None)
+            if product_info is not None
+            else None
+        )
+        if retention is None and ext_config is not None:
+            retention = getattr(ext_config, "message_retention_time", None)
+        trace_on = (
+            getattr(product_info, "trace_on", None) if product_info is not None else None
+        )
+        storage_encryption = (
+            getattr(product_info, "storage_encryption", None)
+            if product_info is not None
+            else None
+        )
+
         return InstanceInfo(
             instance_id=instance_id,
             name=getattr(item, "instance_name", "") or instance_id,
@@ -230,6 +287,15 @@ class RocketMQService:
             create_time=getattr(item, "create_time", "") or "",
             topic_count=getattr(item, "topic_count", None),
             group_count=getattr(item, "group_count", None),
+            endpoint_list=endpoint_list,
+            acl_type=acl_type or "",
+            acl_types=acl_types,
+            default_vpc_auth_free=default_vpc_auth_free,
+            account_username=account_username or "",
+            quotas=quotas,
+            retention_hours=retention,
+            trace_on=trace_on,
+            storage_encryption=storage_encryption,
         )
 
     @staticmethod
@@ -294,6 +360,128 @@ class RocketMQService:
             body_size=_as_int(getattr(item, "body_size", 0)),
             user_properties=dict(getattr(item, "user_properties", None) or {}),
             system_properties=dict(getattr(item, "system_properties", None) or {}),
+        )
+
+    @staticmethod
+    def _map_trace_operations(operations: Any) -> list[TraceOperationInfo]:
+        return [
+            TraceOperationInfo(
+                operate_type=getattr(operation, "operate_type", "") or "",
+                operate_time=getattr(operation, "operate_time", "") or "",
+                dead_message=bool(getattr(operation, "dead_message", False)),
+                invisible_time=getattr(operation, "invisible_time", None),
+            )
+            for operation in (operations or [])
+        ]
+
+    @classmethod
+    def _map_trace(cls, data: Any, message_id: str, topic_name: str) -> TraceInfo:
+        message = getattr(data, "message_info", None)
+        keys = list(getattr(message, "message_keys", None) or []) if message is not None else []
+        producer_info = getattr(data, "producer_info", None)
+        producer_records = (
+            [
+                TraceProducerInfo(
+                    arrive_time=getattr(record, "arrive_time", "") or "",
+                    client_host=getattr(record, "client_host", "") or "",
+                    produce_duration=getattr(record, "produce_duration", None),
+                    produce_status=getattr(record, "produce_status", "") or "",
+                    produce_time=getattr(record, "produce_time", "") or "",
+                    recall_time=getattr(record, "recall_time", "") or "",
+                    user_name=getattr(record, "user_name", "") or "",
+                    message_source=getattr(record, "message_source", "") or "",
+                    dlq_origin_message_id=getattr(record, "dlq_origin_message_id", "") or "",
+                    dlq_origin_topic=getattr(record, "dlq_origin_topic", "") or "",
+                )
+                for record in (getattr(producer_info, "records", None) or [])
+            ]
+            if producer_info is not None
+            else []
+        )
+        broker = getattr(data, "broker_info", None)
+        consumer_infos = []
+        for info in getattr(data, "consumer_infos", None) or []:
+            dead_letter = getattr(info, "dead_letter_info", None)
+            records = [
+                TraceConsumerRecordInfo(
+                    client_host=getattr(record, "client_host", "") or "",
+                    consume_status=getattr(record, "consume_status", "") or "",
+                    fifo_enable=bool(getattr(record, "fifo_enable", False)),
+                    pop_ck=getattr(record, "pop_ck", "") or "",
+                    user_name=getattr(record, "user_name", "") or "",
+                    operations=cls._map_trace_operations(
+                        getattr(record, "operations", None)
+                    ),
+                )
+                for record in (getattr(info, "records", None) or [])
+            ]
+            consumer_infos.append(
+                TraceConsumerInfo(
+                    consumer_group_id=getattr(info, "consumer_group_id", "") or "",
+                    consume_status=getattr(info, "consume_status", "") or "",
+                    dead_message=bool(getattr(info, "dead_message", False)),
+                    dead_letter_topic=(
+                        getattr(dead_letter, "topic_name", "") or ""
+                        if dead_letter is not None
+                        else ""
+                    ),
+                    dead_letter_message_id=(
+                        getattr(dead_letter, "message_id", "") or ""
+                        if dead_letter is not None
+                        else ""
+                    ),
+                    dlq_time=(
+                        getattr(dead_letter, "to_dlq_time", "") or ""
+                        if dead_letter is not None
+                        else ""
+                    ),
+                    records=records,
+                )
+            )
+
+        return TraceInfo(
+            message_id=(
+                getattr(message, "message_id", "") or ""
+                if message is not None
+                else ""
+            )
+            or message_id,
+            topic_name=(
+                getattr(message, "topic_name", "") or ""
+                if message is not None
+                else ""
+            )
+            or topic_name,
+            tag=(getattr(message, "message_tag", "") or "") if message is not None else "",
+            keys=", ".join(str(key) for key in keys),
+            message_type=(
+                getattr(message, "message_type", "") or ""
+                if message is not None
+                else ""
+            ),
+            born_time=(getattr(message, "born_time", "") or "") if message is not None else "",
+            store_time=(getattr(message, "store_time", "") or "") if message is not None else "",
+            born_host=(getattr(message, "born_host", "") or "") if message is not None else "",
+            store_host=(getattr(message, "store_host", "") or "") if message is not None else "",
+            transaction_id=(
+                getattr(message, "transaction_id", "") or ""
+                if message is not None
+                else ""
+            ),
+            producer_records=producer_records,
+            broker_delay_status=(
+                getattr(broker, "delay_status", "") or "" if broker is not None else ""
+            ),
+            broker_preset_delay_time=(
+                getattr(broker, "preset_delay_time", "") or "" if broker is not None else ""
+            ),
+            broker_recall_result=(
+                getattr(broker, "recall_result", "") or "" if broker is not None else ""
+            ),
+            broker_operations=cls._map_trace_operations(
+                getattr(broker, "operations", None) if broker is not None else None
+            ),
+            consumer_infos=consumer_infos,
         )
 
     # ------------------------------------------------------------- instances
@@ -651,6 +839,148 @@ class RocketMQService:
         self._cache.set(cache_key, result, 10)
         return result
 
+    def list_consumer_connections(
+        self, instance_id: str, group_id: str
+    ) -> list[ConsumerConnectionInfo]:
+        self._ensure_allowed(instance_id)
+        cache_key = f"connections:{instance_id}:{group_id}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        request = m.ListConsumerConnectionsRequest()
+        response = self._call(
+            "ListConsumerConnections",
+            lambda: self.client.list_consumer_connections(instance_id, group_id, request),
+        )
+        data = self._data(response, "ListConsumerConnections")
+        connections = [
+            ConsumerConnectionInfo(
+                client_id=getattr(item, "client_id", "") or "",
+                egress_ip=getattr(item, "egress_ip", "") or "",
+                hostname=getattr(item, "hostname", "") or "",
+                language=getattr(item, "language", "") or "",
+                version=getattr(item, "version", "") or "",
+                message_model=getattr(item, "message_model", "") or "",
+            )
+            for item in (getattr(data, "connections", None) or [])
+        ]
+        self._cache.set(cache_key, connections, 10)
+        return connections
+
+    def get_consumer_stack(
+        self, instance_id: str, group_id: str, client_id: str
+    ) -> list[ConsumerStackInfo]:
+        self._ensure_allowed(instance_id)
+        if not client_id:
+            raise ValidationError("缺少消费者客户端 ID")
+        request = m.GetConsumerStackRequest(client_id=client_id)
+        response = self._call(
+            "GetConsumerStack",
+            lambda: self.client.get_consumer_stack(instance_id, group_id, request),
+        )
+        data = self._data(response, "GetConsumerStack")
+        return [
+            ConsumerStackInfo(
+                thread=getattr(item, "thread", "") or "",
+                tracks=list(getattr(item, "tracks", None) or []),
+            )
+            for item in (getattr(data, "stacks", None) or [])
+        ]
+
+    def list_topic_subscriptions(
+        self, instance_id: str, topic_name: str
+    ) -> list[TopicSubscriptionInfo]:
+        self._ensure_allowed(instance_id)
+        cache_key = f"tsubs:{instance_id}:{topic_name}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        response = self._call(
+            "ListTopicSubscriptions",
+            lambda: self.client.list_topic_subscriptions(instance_id, topic_name),
+        )
+        data = self._data(response, "ListTopicSubscriptions")
+        items = [
+            TopicSubscriptionInfo(
+                consumer_group_id=getattr(item, "consumer_group_id", "") or "",
+                topic_name=getattr(item, "topic_name", "") or topic_name,
+                filter_type=getattr(item, "filter_expression_type", "") or "",
+                filter_expression=getattr(item, "filter_expression", "") or "",
+                status=getattr(item, "subscription_status", "") or "",
+                message_model=getattr(item, "message_model", "") or "",
+                consistency=getattr(item, "consistency", "") or "",
+            )
+            for item in (data or [])
+        ]
+        self._cache.set(cache_key, items, 10)
+        return items
+
+    def get_consume_timespan(
+        self, instance_id: str, group_id: str, topic_name: str
+    ) -> ConsumeTimespanInfo | None:
+        self._ensure_allowed(instance_id)
+        if not topic_name:
+            raise ValidationError("请选择要查看的 Topic")
+        cache_key = f"timespan:{instance_id}:{group_id}:{topic_name}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        response = self._call(
+            "GetConsumeTimespan",
+            lambda: self.client.get_consume_timespan(instance_id, group_id, topic_name),
+        )
+        data = self._data(response, "GetConsumeTimespan")
+        if data is None:
+            return None
+        result = ConsumeTimespanInfo(
+            consumer_group_id=getattr(data, "consumer_group_id", "") or group_id,
+            topic_name=getattr(data, "topic_name", "") or topic_name,
+            consume_timestamp=_as_int(getattr(data, "consume_timestamp", 0)),
+            min_timestamp=_as_int(getattr(data, "min_timestamp", 0)),
+            max_timestamp=_as_int(getattr(data, "max_timestamp", 0)),
+        )
+        self._cache.set(cache_key, result, 10)
+        return result
+
+    def reset_consume_offset(
+        self,
+        instance_id: str,
+        group_id: str,
+        topic_name: str,
+        *,
+        reset_type: str,
+        reset_time: datetime | None = None,
+    ) -> None:
+        self._ensure_allowed(instance_id)
+        if reset_type not in {"LATEST_OFFSET", "SPECIFIED_TIME"}:
+            raise ValidationError("不支持的位点重置方式")
+        if not topic_name:
+            raise ValidationError("请选择要重置的 Topic")
+        reset_time_text = None
+        if reset_type == "SPECIFIED_TIME":
+            if reset_time is None:
+                raise ValidationError("按指定时间回放时必须选择时间")
+            reset_time_text = self._api_time(reset_time)
+
+        request = m.ResetConsumeOffsetRequest(
+            reset_type=reset_type,
+            reset_time=reset_time_text,
+        )
+        response = self._call(
+            "ResetConsumeOffset",
+            lambda: self.client.reset_consume_offset(
+                instance_id, group_id, topic_name, request
+            ),
+        )
+        self._data(response, "ResetConsumeOffset")
+        self._cache.invalidate(f"lag:{instance_id}:")
+        self._cache.invalidate(f"timespan:{instance_id}:")
+        self._cache.invalidate(f"group:{instance_id}:")
+        self._cache.invalidate(f"groups:{instance_id}:")
+
     # -------------------------------------------------------------- messages
 
     def list_messages(
@@ -703,11 +1033,39 @@ class RocketMQService:
             raise ServiceError(f"消息 {msg_id} 不存在", code="MessageNotFound", status_code=404)
         return self._map_message(data, fallback_topic=topic)
 
+    def get_message_trace(
+        self,
+        instance_id: str,
+        topic: str,
+        msg_id: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> TraceInfo | None:
+        self._ensure_allowed(instance_id)
+        if not topic or not msg_id:
+            raise ValidationError("缺少 Topic 或 Message ID")
+        if end_time <= start_time:
+            raise ValidationError("结束时间必须晚于开始时间")
+
+        request = m.GetTraceRequest(
+            start_time=self._api_time(start_time),
+            end_time=self._api_time(end_time),
+        )
+        response = self._call(
+            "GetTrace",
+            lambda: self.client.get_trace(instance_id, topic, msg_id, request),
+        )
+        data = self._data(response, "GetTrace")
+        if data is None:
+            return None
+        return self._map_trace(data, msg_id, topic)
+
     # ----------------------------------------------------------------- cache
 
     def _invalidate_topics(self, instance_id: str) -> None:
         self._cache.invalidate(f"topics:{instance_id}:")
         self._cache.invalidate(f"topic:{instance_id}:")
+        self._cache.invalidate(f"tsubs:{instance_id}:")
         self._cache.invalidate(f"lag:{instance_id}:")
         self._cache.invalidate(f"instance:{instance_id}")
         self._cache.invalidate("instances")
@@ -716,6 +1074,8 @@ class RocketMQService:
         self._cache.invalidate(f"groups:{instance_id}:")
         self._cache.invalidate(f"group:{instance_id}:")
         self._cache.invalidate(f"subs:{instance_id}:")
+        self._cache.invalidate(f"connections:{instance_id}:")
+        self._cache.invalidate(f"timespan:{instance_id}:")
         self._cache.invalidate(f"lag:{instance_id}:")
         self._cache.invalidate(f"instance:{instance_id}")
         self._cache.invalidate("instances")

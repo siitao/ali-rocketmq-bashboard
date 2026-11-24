@@ -17,8 +17,14 @@
         "rocketmq:DeleteConsumerGroup",
         "rocketmq:ListConsumerGroupSubscriptions",
         "rocketmq:GetConsumerGroupLag",
+        "rocketmq:ListConsumerConnections",
+        "rocketmq:GetConsumerStack",
+        "rocketmq:ListTopicSubscriptions",
+        "rocketmq:GetConsumeTimespan",
+        "rocketmq:ResetConsumeOffset",
         "rocketmq:ListMessages",
-        "rocketmq:GetMessageDetail"
+        "rocketmq:GetMessageDetail",
+        "rocketmq:GetTrace"
       ],
       "Resource": [
         "acs:rocketmq:cn-hangzhou:1234567890123456:instance/rmq-cn-xxxxxxxx"

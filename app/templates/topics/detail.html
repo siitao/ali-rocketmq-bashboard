@@ -65,6 +65,42 @@
 
 <div class="card">
   <div class="card-head">
+    <h2>订阅该 Topic 的 Group</h2>
+    <span class="card-sub">{{ topic_subscriptions|length }} 个</span>
+  </div>
+  {% if subscriptions_error %}
+  <div class="card-body"><div class="flash flash-warning">订阅关系读取失败：{{ subscriptions_error }}</div></div>
+  {% elif topic_subscriptions %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Consumer Group</th><th>过滤类型</th><th>过滤表达式</th><th>订阅状态</th><th>消费模式</th><th>一致性</th></tr>
+      </thead>
+      <tbody>
+      {% for item in topic_subscriptions %}
+        <tr>
+          <td><a class="mono" href="/groups/{{ item.consumer_group_id|urlencode }}{{ instance_qs }}">{{ item.consumer_group_id }}</a></td>
+          <td>{{ item.filter_type or '-' }}</td>
+          <td class="mono">{{ item.filter_expression or '*' }}</td>
+          <td><span class="badge {{ item.status|status_class }}">{{ item.status or '未知' }}</span></td>
+          <td>{{ item.message_model|message_model }}</td>
+          <td>
+            {% if item.consistency %}
+            <span class="badge {{ item.consistency|status_class }}">{{ item.consistency }}</span>
+            {% else %}<span class="cell-muted">-</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>暂无 Group 订阅</strong>该 Topic 当前没有消费者分组订阅。</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
     <h2>排障入口</h2>
     <span class="card-sub">按 msgId、Key 或时间范围查询消息</span>
   </div>

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% from "_datetime_field.html" import datetime_field %}
+{% block title %}消息轨迹 · {{ msg_id }} · {{ app_name }}{% endblock %}
+{% block content %}
+{% set back_link = "/messages/" ~ (msg_id|urlencode) ~ "?topic=" ~ (topic|urlencode) ~ ("&instance=" ~ (instance_id|urlencode) if instance_id else "") %}
+<div class="breadcrumb">
+  <a href="/messages{{ instance_qs }}">消息查询</a>
+  <span class="sep">/</span>
+  <a class="mono" href="{{ back_link }}">{{ msg_id }}</a>
+  <span class="sep">/</span>
+  <span>消息轨迹</span>
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>消息轨迹</h1>
+    <p class="page-subtitle mono">{{ msg_id }} · {{ topic }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="{{ back_link }}">返回消息详情</a>
+  </div>
+</div>
+
+<div data-max-query-hours="{{ max_hours }}" hidden></div>
+
+{% if error %}
+<div class="flash flash-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card card-overflow">
+  <div class="card-head">
+    <h2>轨迹查询条件</h2>
+    <span class="card-sub">单次查询时间跨度最多 {{ max_hours }} 小时</span>
+  </div>
+  <div class="card-body">
+    <form method="get" action="/messages/{{ msg_id|urlencode }}/trace" data-once data-range-form>
+      {% if instance_id %}<input type="hidden" name="instance" value="{{ instance_id }}">{% endif %}
+      <input type="hidden" name="topic" value="{{ topic }}">
+      <div class="form-grid">
+        {{ datetime_field("start", "开始时间", start_value, "start") }}
+        {{ datetime_field("end", "结束时间", end_value, "end") }}
+      </div>
+      <div class="range-error" data-range-error hidden></div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit" data-busy-text="查询中…">查询轨迹</button>
+        <span class="field-help">消息轨迹需要实例已开启轨迹功能；时间范围应覆盖消息生产和消费时间。</span>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if trace %}
+<div class="card">
+  <div class="card-head">
+    <h2>消息概要</h2>
+    <span class="badge badge-neutral">{{ trace.message_type|msg_type }}</span>
+  </div>
+  <div class="card-body">
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-label">Message ID</div>
+        <div class="detail-value mono">{{ trace.message_id }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Topic</div>
+        <div class="detail-value mono">{{ trace.topic_name }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Tag</div>
+        <div class="detail-value">{{ trace.tag or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Key</div>
+        <div class="detail-value mono">{{ trace.keys or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">生成时间</div>
+        <div class="detail-value">{{ trace.born_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">存储时间</div>
+        <div class="detail-value">{{ trace.store_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">生成主机</div>
+        <div class="detail-value mono">{{ trace.born_host or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">存储主机</div>
+        <div class="detail-value mono">{{ trace.store_host or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">事务 ID</div>
+        <div class="detail-value mono">{{ trace.transaction_id or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>生产者</h2>
+    <span class="card-sub">{{ trace.producer_records|length }} 条记录</span>
+  </div>
+  {% if trace.producer_records %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>发送时间</th><th>到达时间</th><th>状态</th><th>客户端</th><th>用户</th><th class="num">耗时(ms)</th><th>来源</th><th>撤回时间</th></tr>
+      </thead>
+      <tbody>
+      {% for record in trace.producer_records %}
+        <tr>
+          <td class="nowrap">{{ record.produce_time or '-' }}</td>
+          <td class="nowrap">{{ record.arrive_time or '-' }}</td>
+          <td><span class="badge {{ record.produce_status|status_class }}">{{ record.produce_status or '-' }}</span></td>
+          <td class="mono">{{ record.client_host or '-' }}</td>
+          <td>{{ record.user_name or '-' }}</td>
+          <td class="num">{{ record.produce_duration if record.produce_duration is not none else '-' }}</td>
+          <td>{{ record.message_source or '-' }}</td>
+          <td class="nowrap">{{ record.recall_time or '-' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>没有生产者轨迹</strong>消息可能来自其他集群，或轨迹未开启。</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>服务端处理</h2>
+    <span class="card-sub">{{ trace.broker_operations|length }} 个操作</span>
+  </div>
+  <div class="card-body">
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-label">延时状态</div>
+        <div class="detail-value">{{ trace.broker_delay_status or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">预设延时</div>
+        <div class="detail-value">{{ trace.broker_preset_delay_time or '-' }}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">撤回结果</div>
+        <div class="detail-value">{{ trace.broker_recall_result or '-' }}</div>
+      </div>
+    </div>
+    {% if trace.broker_operations %}
+    <table class="kv-table mt-16">
+      <thead><tr><th>操作</th><th>时间</th><th>死信</th><th>不可见时间</th></tr></thead>
+      <tbody>
+      {% for operation in trace.broker_operations %}
+        <tr>
+          <td>{{ operation.operate_type or '-' }}</td>
+          <td>{{ operation.operate_time or '-' }}</td>
+          <td>{{ '是' if operation.dead_message else '否' }}</td>
+          <td>{{ operation.invisible_time if operation.invisible_time is not none else '-' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+{% for consumer in trace.consumer_infos %}
+<div class="card">
+  <div class="card-head">
+    <h2 class="mono">{{ consumer.consumer_group_id }}</h2>
+    <span class="badge {{ consumer.consume_status|status_class }}">{{ consumer.consume_status or '未知' }}</span>
+  </div>
+  {% if consumer.dead_message %}
+  <div class="card-body">
+    <div class="flash flash-warning">
+      该消息已进入死信：<code>{{ consumer.dead_letter_topic or '-' }}</code>
+      · Message ID <code>{{ consumer.dead_letter_message_id or '-' }}</code>
+      · {{ consumer.dlq_time or '-' }}
+    </div>
+  </div>
+  {% endif %}
+  {% if consumer.records %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>消费客户端</th><th>消费状态</th><th>FIFO</th><th>用户</th><th>消费操作</th></tr>
+      </thead>
+      <tbody>
+      {% for record in consumer.records %}
+        <tr>
+          <td class="mono">{{ record.client_host or '-' }}</td>
+          <td><span class="badge {{ record.consume_status|status_class }}">{{ record.consume_status or '-' }}</span></td>
+          <td>{{ '是' if record.fifo_enable else '否' }}</td>
+          <td>{{ record.user_name or '-' }}</td>
+          <td>
+            {% for operation in record.operations %}
+            <div class="cell-muted">
+              <span class="mono">{{ operation.operate_type or '-' }}</span>
+              · {{ operation.operate_time or '-' }}
+              {% if operation.dead_message %} · 死信{% endif %}
+            </div>
+            {% else %}
+            <span class="cell-muted">-</span>
+            {% endfor %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>没有消费记录</strong>消费者尚未拉取该消息，或轨迹数据不完整。</div>
+  {% endif %}
+</div>
+{% endfor %}
+{% elif not error %}
+<div class="card">
+  <div class="empty">
+    <strong>未查询到轨迹数据</strong>
+    请确认实例已开启消息轨迹、时间范围覆盖消息生产/消费时间；部分老客户端可能没有消费轨迹。
+  </div>
+</div>
+{% endif %}
+{% endblock %}
