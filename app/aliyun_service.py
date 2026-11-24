@@ -888,6 +888,29 @@ class RocketMQService:
             for item in (getattr(data, "stacks", None) or [])
         ]
 
+    @staticmethod
+    def _consistency_text(value: Any) -> str:
+        if value is True:
+            return "一致"
+        if value is False:
+            return "不一致"
+        text = str(value or "").strip()
+        return {"CONSISTENT": "一致", "INCONSISTENT": "不一致"}.get(text.upper(), text)
+
+    @classmethod
+    def _map_topic_subscription(
+        cls, item: Any, topic_name: str
+    ) -> TopicSubscriptionInfo:
+        return TopicSubscriptionInfo(
+            consumer_group_id=getattr(item, "consumer_group_id", "") or "",
+            topic_name=getattr(item, "topic_name", "") or topic_name,
+            filter_type=getattr(item, "filter_expression_type", "") or "",
+            filter_expression=getattr(item, "filter_expression", "") or "",
+            status=getattr(item, "subscription_status", "") or "",
+            message_model=getattr(item, "message_model", "") or "",
+            consistency=cls._consistency_text(getattr(item, "consistency", "")),
+        )
+
     def list_topic_subscriptions(
         self, instance_id: str, topic_name: str
     ) -> list[TopicSubscriptionInfo]:
@@ -903,16 +926,7 @@ class RocketMQService:
         )
         data = self._data(response, "ListTopicSubscriptions")
         items = [
-            TopicSubscriptionInfo(
-                consumer_group_id=getattr(item, "consumer_group_id", "") or "",
-                topic_name=getattr(item, "topic_name", "") or topic_name,
-                filter_type=getattr(item, "filter_expression_type", "") or "",
-                filter_expression=getattr(item, "filter_expression", "") or "",
-                status=getattr(item, "subscription_status", "") or "",
-                message_model=getattr(item, "message_model", "") or "",
-                consistency=getattr(item, "consistency", "") or "",
-            )
-            for item in (data or [])
+            self._map_topic_subscription(item, topic_name) for item in (data or [])
         ]
         self._cache.set(cache_key, items, 10)
         return items

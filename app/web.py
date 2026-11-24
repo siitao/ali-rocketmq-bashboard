@@ -35,8 +35,10 @@ def format_dt(value: datetime | None, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
 templates.env.filters["dt"] = format_dt
 
 
-def status_class(value: str | None) -> str:
-    normalized = (value or "").upper()
+def status_class(value: str | bool | None) -> str:
+    if isinstance(value, bool):
+        return "badge-success" if value else "badge-warning"
+    normalized = str(value or "").strip().upper()
     if normalized in {
         "RUNNING",
         "ACTIVE",
@@ -46,6 +48,7 @@ def status_class(value: str | None) -> str:
         "SUCCESS",
         "ONLINE",
         "CONSISTENT",
+        "一致",
     }:
         return "badge-success"
     if normalized in {
@@ -55,6 +58,7 @@ def status_class(value: str | None) -> str:
         "CONFIGURING",
         "PARTIAL",
         "INCONSISTENT",
+        "不一致",
     }:
         return "badge-warning"
     if normalized in {

@@ -225,6 +225,33 @@ def test_dashboard_shows_access_info_and_quotas(client):
     assert "<progress" in response.text
 
 
+def test_topic_subscription_consistency_handles_bool():
+    from types import SimpleNamespace
+
+    from app.aliyun_service import RocketMQService
+    from app.web import status_class
+
+    item = SimpleNamespace(
+        consumer_group_id="group",
+        topic_name="topic",
+        filter_expression_type="TAG",
+        filter_expression="*",
+        subscription_status="ONLINE",
+        message_model="CLUSTERING",
+        consistency=False,
+    )
+    mapped = RocketMQService._map_topic_subscription(item, "topic")
+    assert mapped.consistency == "不一致"
+    assert status_class(mapped.consistency) == "badge-warning"
+    assert status_class(True) == "badge-success"
+    assert status_class(False) == "badge-warning"
+
+    item.consistency = True
+    mapped = RocketMQService._map_topic_subscription(item, "topic")
+    assert mapped.consistency == "一致"
+    assert status_class(mapped.consistency) == "badge-success"
+
+
 def test_mock_new_features():
     from datetime import datetime, timedelta, timezone
 

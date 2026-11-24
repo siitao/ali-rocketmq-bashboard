@@ -577,7 +577,7 @@ class MockRocketMQService:
                             filter_expression=subscription.filter_expression,
                             status=subscription.status,
                             message_model=subscription.message_model,
-                            consistency="CONSISTENT",
+                            consistency="一致",
                         )
                     )
             return result
